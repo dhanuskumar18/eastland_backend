@@ -1,0 +1,243 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Model for general CMS pages (Home, About, Services, etc.)
+model Page {
+  id           Int                @id @default(autoincrement())
+  // Slug identifier for the page (e.g., "home", "about-us") - not locale-specific
+  slug         String             @unique
+  translations PageTranslation[]  // Multi-language content for this page
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  @@index([slug])
+}
+
+// Translations for Page content to support multilingual content.
+model PageTranslation {
+  id            Int      @id @default(autoincrement())
+  page          Page     @relation(fields: [pageId], references: [id])
+  pageId        Int
+  locale        String   // e.g., "en", "es"
+  title         String   // Localized title
+  slug          String   // Locale-specific slug (optional uniqueness constraints below)
+  content       Json     // Rich content or structured data (Markdown, HTML blocks, etc.)
+  // Optional SEO fields
+  seoTitle      String?
+  seoDescription String?
+  canonicalUrl  String?
+  // Content versioning for future
+  version       Int      @default(1)
+  // Optional image metadata fields for a featured image/banner on the page
+  bannerUrl     String?
+  bannerAlt     String?
+  bannerWidth   Int?
+  bannerHeight  Int?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([pageId, locale])    // Unique translation per page and locale
+  @@unique([slug, locale])      // Unique slug per locale (if slugs are localizable)
+}
+
+// Video content catalog (e.g., YouTube embeds)
+enum VideoType {
+  VIDEO
+  PLAYLIST
+}
+
+model Video {
+  id            Int              @id @default(autoincrement())
+  title         String
+  description   String?
+  embedUrl      String           // e.g., YouTube video or playlist URL/ID
+  videoType     VideoType        @default(VIDEO)
+  // Optional category for grouping videos
+  category      VideoCategory?   @relation(fields: [categoryId], references: [id])
+  categoryId    Int?
+  // Many-to-many tags for videos
+  tags          Tag[]            @relation("VideoTags")
+  // Many-to-many relation: videos can be associated with products
+  products      Product[]        @relation("ProductVideos")
+  datePublished DateTime?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@index([datePublished])
+}
+
+// Categories specifically for videos (topics, series, etc.)
+model VideoCategory {
+  id       Int      @id @default(autoincrement())
+  name     String
+  slug     String   @unique
+  videos   Video[]
+}
+
+// General tags for various content (applies to products, videos, etc.)
+model Tag {
+  id       Int       @id @default(autoincrement())
+  name     String    @unique
+  // Relations for many-to-many tagging
+  products Product[] @relation("ProductTags")
+  videos   Video[]   @relation("VideoTags")
+}
+
+// Brand or manufacturer for products
+model Brand {
+  id       Int       @id @default(autoincrement())
+  name     String    @unique
+  slug     String    @unique
+  products Product[]
+}
+
+// Product catalog
+model Product {
+  id           Int                   @id @default(autoincrement())
+  sku          String                @unique   // Optional product code
+  brand        Brand                 @relation(fields: [brandId], references: [id])
+  brandId      Int
+  // Many-to-many categories for products (e.g., multiple category tags)
+  categories   ProductCategory[]     @relation("ProductCategories")
+  // Many-to-many tags for products
+  tags         Tag[]                 @relation("ProductTags")
+  // Product images and metadata
+  images       ProductImage[]
+  // Translatable content (name, description, SEO) 
+  translations ProductTranslation[]
+  // Associated videos (many-to-many)
+  videos       Video[]               @relation("ProductVideos")
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+
+  @@index([brandId])
+}
+
+// Categories for products
+model ProductCategory {
+  id       Int       @id @default(autoincrement())
+  name     String
+  slug     String    @unique
+  products Product[] @relation("ProductCategories")
+}
+
+// Translations for product content (supporting multiple locales)
+model ProductTranslation {
+  id             Int      @id @default(autoincrement())
+  product        Product  @relation(fields: [productId], references: [id])
+  productId      Int
+  locale         String
+  name           String
+  slug           String
+  description    String   @db.Text // Rich description text
+  // Optional SEO fields
+  seoTitle       String?
+  seoDescription String?
+  canonicalUrl   String?
+  // Content versioning for future
+  version        Int      @default(1)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([productId, locale])    // Unique translation per product & locale
+  @@unique([slug, locale])         // Unique slug per locale (if product URLs are localized)
+}
+
+// Metadata for product images (one-to-many)
+model ProductImage {
+  id        Int     @id @default(autoincrement())
+  product   Product @relation(fields: [productId], references: [id])
+  productId Int
+  url       String
+  alt       String?
+  width     Int?
+  height    Int?
+  position  Int?    // ordering index if multiple images
+}
+
+// Customer or client testimonials
+model Testimonial {
+  id          Int      @id @default(autoincrement())
+  content     String
+  author      String
+  // Additional fields like authorTitle, company, rating could be added
+  isPublished Boolean  @default(false) // To allow moderation
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// Contact form submissions from users
+model ContactSubmission {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String
+  phone     String?
+  subject   String?
+  message   String   @db.Text
+  createdAt DateTime @default(now())
+}
+
+// User accounts for CMS administration
+model User {
+  id           Int       @id @default(autoincrement())
+  email        String    @unique
+  password     String
+  name         String?
+  role         Role      @relation(fields: [roleId], references: [id])
+  roleId       Int
+  refreshToken String?   // Store hashed refresh token
+  otps         Otp[]      // One-to-many relation with OTPs
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+// OTP (One-Time Password) model for password reset and verification
+model Otp {
+  id        Int      @id @default(autoincrement())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    Int
+  code      String   // Store hashed OTP code
+  type      OtpType  @default(PASSWORD_RESET) // Type of OTP (password reset, email verification, etc.)
+  expiresAt DateTime // OTP expiration time
+  isUsed    Boolean  @default(false) // Track if OTP has been used
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+
+// Role/permission model (can be extended with many-to-many for more complex permissions)
+model Role {
+  id       Int      @id @default(autoincrement())
+  name     UserRole @unique
+  users    User[]
+}
+
+// Navigation menus (configurable in CMS)
+model Menu {
+  id    Int    @id @default(autoincrement())
+  name  String
+  items Json   // JSON structure for menu items (label, link, order, etc.)
+}
+
+// User role enum
+enum UserRole {
+  ADMIN
+  USER
+}
+
+// OTP type enum
+enum OtpType {
+  PASSWORD_RESET
+  EMAIL_VERIFICATION
+  TWO_FACTOR_AUTH
+  ACCOUNT_RECOVERY
+}
