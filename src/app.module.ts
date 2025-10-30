@@ -9,6 +9,8 @@ import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
 import { APP_GUARD } from '@nestjs/core';
 import { CsrfMiddleware } from './auth/csrf/csrf.middleware';
+import { PagesModule } from './pages/pages.module';
+import { SectionsModule } from './sections/sections.module';
 
 @Module({
   imports: [
@@ -17,6 +19,8 @@ import { CsrfMiddleware } from './auth/csrf/csrf.middleware';
     EmailModule,
     UserModule,
     DatabaseModule, 
+    PagesModule,
+    SectionsModule,
     ConfigModule.forRoot({
       isGlobal: true,
     }),
