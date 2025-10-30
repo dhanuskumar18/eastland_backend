@@ -10,40 +10,41 @@ datasource db {
 // Model for general CMS pages (Home, About, Services, etc.)
 model Page {
   id           Int                @id @default(autoincrement())
-  // Slug identifier for the page (e.g., "home", "about-us") - not locale-specific
-  slug         String             @unique
-  translations PageTranslation[]  // Multi-language content for this page
+  name         String
+  slug         String?            @unique
+  sections     Section[]          // Page is composed of multiple sections
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt
 
   @@index([slug])
 }
 
-// Translations for Page content to support multilingual content.
-model PageTranslation {
-  id            Int      @id @default(autoincrement())
-  page          Page     @relation(fields: [pageId], references: [id])
-  pageId        Int
-  locale        String   // e.g., "en", "es"
-  title         String   // Localized title
-  slug          String   // Locale-specific slug (optional uniqueness constraints below)
-  content       Json     // Rich content or structured data (Markdown, HTML blocks, etc.)
-  // Optional SEO fields
-  seoTitle      String?
-  seoDescription String?
-  canonicalUrl  String?
-  // Content versioning for future
-  version       Int      @default(1)
-  // Optional image metadata fields for a featured image/banner on the page
-  bannerUrl     String?
-  bannerAlt     String?
-  bannerWidth   Int?
-  bannerHeight  Int?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+// Sections that make up a Page. Each Section has multilingual content via translations.
+model Section {
+  id        Int                   @id @default(autoincrement())
+  name      String               
+  page      Page                  @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  pageId    Int
+  translations SectionTranslation[]
+  createdAt DateTime              @default(now())
+  updatedAt DateTime              @updatedAt
 
-  @@unique([pageId, locale])    // Unique translation per page and locale
-  @@unique([slug, locale])      // Unique slug per locale (if slugs are localizable)
+  @@index([pageId])
+  @@unique([pageId, name])
+}
+
+// Translations for Section content (multilingual support per section)
+model SectionTranslation {
+  id         Int      @id @default(autoincrement())
+  section    Section  @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  sectionId  Int
+  locale     String   // e.g., "en", "es"
+  content    Json     // Rich content or structured data per locale
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([sectionId, locale])
+  @@index([locale])
 }
 
 // Video content catalog (e.g., YouTube embeds)
