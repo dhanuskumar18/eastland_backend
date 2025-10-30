@@ -5,8 +5,11 @@ import { DatabaseService } from 'src/database/database.service';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { EmailService } from './email.service';
-import type { Response } from 'express';
+import { EmailService } from '../email/email.service';
+import { SessionService } from '../session/session.service';
+import { DeviceDetectionService } from '../session/device-detection.service';
+import type { Response, Request } from 'express';
+import * as crypto from 'crypto';
 
 @Injectable()
 export class AuthService {
@@ -15,8 +18,10 @@ export class AuthService {
     private jwt: JwtService,
     private config: ConfigService,
     private emailService: EmailService,
+    private sessionService: SessionService,
+    private deviceDetection: DeviceDetectionService,
   ) {}
-  async signin(dto: AuthDto, res: Response) {
+  async signin(dto: AuthDto, res: Response, req: Request) {
     const user = await this.prisma.user.findUnique({
       where: {
         email: dto.email,
@@ -32,13 +37,15 @@ export class AuthService {
     if (!pwMatches) {
       throw new ForbiddenException('Credentials incorrect');
     }
-    return this.signTokenWithCookie(user.id, user.email, user.role.name, res);
+    return this.signTokenWithCookie(user.id, user.email, user.role.name, res, req);
    }
 
-    async signTokenWithCookie(userId: number, email: string, role: string, res: Response): Promise<TokenResponseDto> {
+    async signTokenWithCookie(userId: number, email: string, role: string, res: Response, req?: Request): Promise<TokenResponseDto> {
+      const tokenId = crypto.randomUUID(); // Generate unique token ID for session tracking
       const payload = {
         sub: userId,
         email,
+        jti: tokenId, // JWT ID for session tracking
       };
       
       // Generate access token (short-lived)
@@ -53,7 +60,12 @@ export class AuthService {
         secret: this.config.get('JWT_REFRESH_SECRET'),
       });
 
-      // Hash and store refresh token in database
+      // Create session if request is available
+      if (req) {
+        await this.sessionService.createSession(userId, tokenId, req);
+      }
+
+      // Hash and store refresh token in database (for backward compatibility)
       const hashedRefreshToken = await argon.hash(refreshToken);
       await this.prisma.user.update({
         where: { id: userId },
@@ -76,7 +88,7 @@ export class AuthService {
 
 
 
-  async signup(dto: SignupDto, res: Response) {
+  async signup(dto: SignupDto, res: Response, req: Request) {
     try {
       const hash = await argon.hash(dto.password);
       
@@ -110,7 +122,7 @@ export class AuthService {
           },
         },
       });
-      return this.signTokenWithCookie(user.id, user.email, user.role.name, res);
+      return this.signTokenWithCookie(user.id, user.email, user.role.name, res, req);
     } catch (error) {
       if (error instanceof PrismaClientKnownRequestError) {
         if (error.code === 'P2002') {
@@ -121,7 +133,7 @@ export class AuthService {
     }
   }
 
-  async refreshToken(refreshToken: string, res: Response): Promise<TokenResponseDto> {
+  async refreshToken(refreshToken: string, res: Response, req?: Request): Promise<TokenResponseDto> {
     try {
       // Verify the refresh token
       const payload = await this.jwt.verifyAsync(refreshToken, {
@@ -136,39 +148,46 @@ export class AuthService {
         },
       });
 
-      if (!user || !user.refreshToken) {
-        throw new ForbiddenException('Invalid refresh token');
+      if (!user) {
+        throw new ForbiddenException('User not found for refresh token');
+      }
+
+      if (!user.refreshToken) {
+        throw new ForbiddenException('No refresh token stored for user');
       }
 
       // Verify the refresh token matches the stored hash
       const refreshTokenMatches = await argon.verify(user.refreshToken, refreshToken);
       if (!refreshTokenMatches) {
-        throw new ForbiddenException('Invalid refresh token');
+        throw new ForbiddenException('Refresh token does not match stored token');
       }
 
       // Generate new tokens
-      return this.signTokenWithCookie(user.id, user.email, user.role.name, res);
+      return this.signTokenWithCookie(user.id, user.email, user.role.name, res, req);
     } catch (error) {
+      // Handle JWT verification errors specifically
+      if (error.name === 'JsonWebTokenError') {
+        throw new ForbiddenException('Invalid refresh token format');
+      }
+      
+      if (error.name === 'TokenExpiredError') {
+        throw new ForbiddenException('Refresh token has expired');
+      }
+      
+      if (error.name === 'NotBeforeError') {
+        throw new ForbiddenException('Refresh token not yet valid');
+      }
+      
+      // Re-throw ForbiddenException as-is
+      if (error instanceof ForbiddenException) {
+        throw error;
+      }
+      
+      // Handle any other errors
       throw new ForbiddenException('Invalid refresh token');
     }
   }
 
-  async logout(userId: number, res: Response): Promise<{ message: string }> {
-    // Remove refresh token from database
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { refreshToken: null },
-    });
-
-    // Clear refresh token cookie
-    res.clearCookie('refreshToken', {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-    });
-
-    return { message: 'Logged out successfully' };
-  }
 
   async forgotPassword(dto: ForgotPasswordDto): Promise<{ message: string }> {
     // Check if user exists
@@ -315,5 +334,84 @@ export class AuthService {
     }
 
     return { message: 'Password reset successfully' };
+  }
+
+  // Session Management Methods
+
+  /**
+   * Get all active sessions for a user
+   */
+  async getUserSessions(userId: number) {
+    return this.sessionService.getUserSessions(userId);
+  }
+
+  /**
+   * Get session statistics for a user
+   */
+  async getSessionStats(userId: number) {
+    return this.sessionService.getSessionStats(userId);
+  }
+
+  /**
+   * Revoke a specific session
+   */
+  async revokeSession(sessionId: string, userId: number) {
+    return this.sessionService.revokeSession(sessionId, userId);
+  }
+
+  /**
+   * Revoke all other sessions (keep current)
+   */
+  async revokeAllOtherSessions(userId: number, currentSessionId: string) {
+    return this.sessionService.revokeAllOtherSessions(userId, currentSessionId);
+  }
+
+  /**
+   * Revoke all sessions for a user
+   */
+  async revokeAllUserSessions(userId: number) {
+    return this.sessionService.revokeAllUserSessions(userId);
+  }
+
+  /**
+   * Get session activity history
+   */
+  async getSessionActivity(sessionId: string, limit: number = 50) {
+    return this.sessionService.getSessionActivity(sessionId, limit);
+  }
+
+  /**
+   * Extend session expiration
+   */
+  async extendSession(sessionId: string, userId: number, additionalDays: number = 7) {
+    return this.sessionService.extendSession(sessionId, userId, additionalDays);
+  }
+
+  /**
+   * Update logout method to handle session management
+   */
+  async logout(userId: number, res: Response, sessionId?: string): Promise<{ message: string }> {
+    if (sessionId) {
+      // Revoke specific session
+      await this.sessionService.revokeSession(sessionId, userId);
+    } else {
+      // Revoke all sessions
+      await this.sessionService.revokeAllUserSessions(userId);
+    }
+
+    // Remove refresh token from database
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { refreshToken: null },
+    });
+
+    // Clear refresh token cookie
+    res.clearCookie('refreshToken', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+    });
+
+    return { message: 'Logged out successfully' };
   }
 }

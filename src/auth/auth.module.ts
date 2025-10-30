@@ -1,14 +1,17 @@
-import { Module } from "@nestjs/common";
+import { Module, forwardRef } from "@nestjs/common";
 import { AuthController } from "./auth.controller";
 import { AuthService } from "./auth.service";
 import { JwtModule } from "@nestjs/jwt";
 import { JwtStrategy } from "./strategy";
-import { EmailService } from "./email.service";
-import { MailerModule } from "@nestjs-modules/mailer";
 import { ConfigModule, ConfigService } from "@nestjs/config";
+import { SessionModule } from "../session/session.module";
+import { EmailModule } from "../email/email.module";
+import { CsrfService } from "./csrf";
 
 @Module({
     imports:[
+        forwardRef(() => SessionModule), // Use forwardRef to break circular dependency
+        EmailModule, // Import the email module
         JwtModule.registerAsync({
             imports: [ConfigModule],
             useFactory: async (config: ConfigService) => ({
@@ -17,33 +20,9 @@ import { ConfigModule, ConfigService } from "@nestjs/config";
             }),
             inject: [ConfigService],
         }),
-        MailerModule.forRootAsync({
-            imports: [ConfigModule],
-            useFactory: async (config: ConfigService) => {
-                const mailConfig = {
-                    transport: {
-                        host: config.get('MAIL_HOST', 'smtp.gmail.com'),
-                        port: parseInt(config.get('MAIL_PORT', '587')),
-                        secure: false, // true for 465, false for other ports
-                        auth: {
-                            user: config.get('MAIL_USER'),
-                            pass: config.get('MAIL_PASS'),
-                        },
-                        tls: {
-                            rejectUnauthorized: false
-                        }
-                    },
-                    defaults: {
-                        from: `"No Reply" <${config.get('MAIL_FROM', 'noreply@example.com')}>`,
-                    },
-                };
-                
-                return mailConfig;
-            },
-            inject: [ConfigService],
-        }),
     ],
     controllers:[AuthController],
-    providers:[AuthService, JwtStrategy, EmailService],
+    providers:[AuthService, JwtStrategy, CsrfService],
+    exports: [CsrfService], // Export CSRF service for use in other modules
 })
 export class AuthModule {}

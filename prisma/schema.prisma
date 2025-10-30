@@ -193,6 +193,7 @@ model User {
   roleId       Int
   refreshToken String?   // Store hashed refresh token
   otps         Otp[]      // One-to-many relation with OTPs
+  sessions     Session[] // One-to-many relation with sessions
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 }
@@ -213,6 +214,45 @@ model Otp {
   @@index([expiresAt])
 }
 
+// Session management model
+model Session {
+  id          String   @id @default(cuid())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      Int
+  tokenId     String   @unique // JWT ID (jti) for tracking
+  deviceInfo  Json?    // Device/browser information
+  ipAddress   String?
+  userAgent   String?
+  location    String?  // Geographic location if available
+  isActive    Boolean  @default(true)
+  isCurrent   Boolean  @default(false) // Mark current session
+  lastUsed    DateTime @default(now())
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  activities  SessionActivity[] // One-to-many relation with activities
+
+  @@index([userId])
+  @@index([tokenId])
+  @@index([expiresAt])
+  @@index([isActive])
+}
+
+// Session activity log for security monitoring
+model SessionActivity {
+  id        Int      @id @default(autoincrement())
+  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  sessionId String
+  action    String   // LOGIN, REFRESH, LOGOUT, SUSPICIOUS_ACTIVITY
+  ipAddress String?
+  userAgent String?
+  details   Json?    // Additional context
+  createdAt DateTime @default(now())
+
+  @@index([sessionId])
+  @@index([action])
+  @@index([createdAt])
+}
 
 // Role/permission model (can be extended with many-to-many for more complex permissions)
 model Role {
@@ -232,6 +272,21 @@ model Menu {
 enum UserRole {
   ADMIN
   USER
+}
+
+// CSRF token model for protection against Cross-Site Request Forgery
+model CsrfToken {
+  id        Int      @id @default(autoincrement())
+  token     String   @unique // The CSRF token value
+  sessionId String?  // Optional session ID for session-based tokens
+  userId    Int?     // Optional user ID for user-based tokens
+  expiresAt DateTime // Token expiration time
+  createdAt DateTime @default(now())
+
+  @@index([token])
+  @@index([sessionId])
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 // OTP type enum
