@@ -9,11 +9,13 @@ async function bootstrap() {
   // CORS Configuration
   app.enableCors({
     origin: [
+      'http://localhost:5000',
       'http://localhost:8000',
       'http://localhost:3001',
       'http://localhost:5173', // Vite default port
       'http://localhost:4200', // Angular default port
       'http://localhost:8080', // Vue default port
+      'http://127.0.0.1:5000',
       'http://127.0.0.1:3000',
       'http://127.0.0.1:3001',
       'http://127.0.0.1:5173',
@@ -32,6 +34,7 @@ async function bootstrap() {
       'Authorization',
       'Cache-Control',
       'Pragma',
+      'X-CSRF-Token',
     ],
     credentials: true, // Allow cookies and authorization headers
     preflightContinue: false,
@@ -44,7 +47,7 @@ async function bootstrap() {
       whitelist:true,
     }
   ));
-  const port = process.env.PORT ?? 3000;
+  const port = process.env.PORT ?? 5000;
   await app.listen(port);
   console.log(`🚀 Application is running on: http://localhost:${port}`);
 }

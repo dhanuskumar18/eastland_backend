@@ -28,7 +28,7 @@ export class CsrfService {
     const expiresAt = new Date(Date.now() + this.tokenExpiryMinutes * 60 * 1000);
 
     // Store token in database for validation
-    await this.prisma.csrfToken.create({
+    await (this.prisma as any).csrfToken.create({
       data: {
         token,
         expiresAt,
@@ -46,7 +46,7 @@ export class CsrfService {
    */
   async validateToken(token: string, sessionId?: string, userId?: number): Promise<boolean> {
     try {
-      const csrfToken = await this.prisma.csrfToken.findFirst({
+      const csrfToken = await (this.prisma as any).csrfToken.findFirst({
         where: {
           token,
           expiresAt: { gt: new Date() }, // Not expired
@@ -88,7 +88,7 @@ export class CsrfService {
    * Clean up expired CSRF tokens
    */
   async cleanupExpiredTokens(): Promise<number> {
-    const result = await this.prisma.csrfToken.deleteMany({
+    const result = await (this.prisma as any).csrfToken.deleteMany({
       where: {
         expiresAt: { lt: new Date() },
       },
@@ -102,7 +102,7 @@ export class CsrfService {
    * Revoke all CSRF tokens for a specific session
    */
   async revokeSessionTokens(sessionId: string): Promise<number> {
-    const result = await this.prisma.csrfToken.deleteMany({
+    const result = await (this.prisma as any).csrfToken.deleteMany({
       where: { sessionId },
     });
 
@@ -114,7 +114,7 @@ export class CsrfService {
    * Revoke all CSRF tokens for a specific user
    */
   async revokeUserTokens(userId: number): Promise<number> {
-    const result = await this.prisma.csrfToken.deleteMany({
+    const result = await (this.prisma as any).csrfToken.deleteMany({
       where: { userId },
     });
 
@@ -126,7 +126,7 @@ export class CsrfService {
    * Get CSRF token info (for debugging/admin purposes)
    */
   async getTokenInfo(token: string): Promise<CsrfTokenData | null> {
-    const csrfToken = await this.prisma.csrfToken.findUnique({
+    const csrfToken = await (this.prisma as any).csrfToken.findUnique({
       where: { token },
     });
 
