@@ -49,16 +49,33 @@ export class SectionsService {
     });
 
     if (translations && translations.length > 0) {
-      // Upsert each translation by composite unique (sectionId, locale)
-      await this.db.$transaction(
-        translations.map((t: SectionTranslationInput) =>
-          this.db.sectionTranslation.upsert({
-            where: { sectionId_locale: { sectionId: id, locale: t.locale } },
-            update: { content: t.content },
-            create: { sectionId: id, locale: t.locale, content: t.content },
-          })
-        )
-      );
+      // Normalize incoming translations: parse stringified JSON and drop entries without content
+      const normalized = translations
+        .map((t: SectionTranslationInput) => {
+          let parsedContent = t.content as any;
+          if (typeof parsedContent === 'string') {
+            try {
+              parsedContent = JSON.parse(parsedContent);
+            } catch {
+              // If parsing fails, keep as original string to surface a clear validation error below
+            }
+          }
+          return { locale: t.locale, content: parsedContent } as SectionTranslationInput;
+        })
+        .filter((t) => typeof t.content !== 'undefined' && t.content !== null);
+
+      if (normalized.length > 0) {
+        // Upsert each translation by composite unique (sectionId, locale)
+        await this.db.$transaction(
+          normalized.map((t: SectionTranslationInput) =>
+            this.db.sectionTranslation.upsert({
+              where: { sectionId_locale: { sectionId: id, locale: t.locale } },
+              update: { content: t.content },
+              create: { sectionId: id, locale: t.locale, content: t.content },
+            })
+          )
+        );
+      }
     }
 
     return this.findOne(id);

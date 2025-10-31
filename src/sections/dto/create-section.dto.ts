@@ -1,4 +1,4 @@
-import { IsArray, IsInt, IsOptional, IsString, ValidateNested } from 'class-validator';
+import { IsArray, IsInt, IsOptional, IsString, ValidateNested, Allow } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class SectionTranslationInput {
@@ -6,6 +6,7 @@ export class SectionTranslationInput {
   locale: string;
 
   // content is JSON, let it pass-through; validate shape at runtime if needed
+  @Allow()
   content: any;
 }
 
