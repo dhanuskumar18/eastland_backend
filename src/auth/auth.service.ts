@@ -423,6 +423,13 @@ export class AuthService {
       sameSite: 'strict',
     });
 
+    // Clear CSRF cookie (double-submit cookie)
+    res.clearCookie('csrf-token', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+    });
+
     return { message: 'Logged out successfully' };
   }
 }
