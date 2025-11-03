@@ -1,0 +1,188 @@
+{
+  "info": {
+    "name": "Tutorial API - Auth, CSRF, Session",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:5000" },
+    { "key": "jwt", "value": "" },
+    { "key": "csrfToken", "value": "" }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Auto-fetch CSRF token for unsafe methods using double-submit endpoint",
+          "const method = pm.request.method.toUpperCase();",
+          "const unsafe = ['POST','PUT','PATCH','DELETE'].includes(method);",
+          "const hasToken = pm.collectionVariables.get('csrfToken');",
+          "function fetchCsrf(cb){ pm.sendRequest({ url: pm.collectionVariables.get('baseUrl') + '/auth/csrf-token/double-submit', method: 'GET' }, (err, res) => { if(!err){ try{ const data = res.json(); pm.collectionVariables.set('csrfToken', data.csrfToken); }catch(e){} } cb(); }); }",
+          "if (unsafe) { if (!hasToken) { fetchCsrf(() => {}); } }"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Signup",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-CSRF-Token", "value": "{{csrfToken}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/auth/signup", "host": ["{{baseUrl}}"], "path": ["auth","signup"] },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"test@example.com\",\n  \"password\": \"Passw0rd!\"\n}" }
+          }
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-CSRF-Token", "value": "{{csrfToken}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth","login"] },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"test@example.com\",\n  \"password\": \"Passw0rd!\"\n}" }
+          }
+        },
+        {
+          "name": "Refresh",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "X-CSRF-Token", "value": "{{csrfToken}}" } ],
+            "url": { "raw": "{{baseUrl}}/auth/refresh", "host": ["{{baseUrl}}"], "path": ["auth","refresh"] }
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{jwt}}" },
+              { "key": "X-CSRF-Token", "value": "{{csrfToken}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/auth/logout", "host": ["{{baseUrl}}"], "path": ["auth","logout"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "CSRF",
+      "item": [
+        {
+          "name": "Get CSRF (anonymous)",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/auth/csrf-token", "host": ["{{baseUrl}}"], "path": ["auth","csrf-token"] } },
+          "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": ["const data = pm.response.json(); if (data.csrfToken) pm.collectionVariables.set('csrfToken', data.csrfToken);"] } } ]
+        },
+        {
+          "name": "Get CSRF (double-submit)",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/auth/csrf-token/double-submit", "host": ["{{baseUrl}}"], "path": ["auth","csrf-token","double-submit"] } },
+          "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": ["const data = pm.response.json(); if (data.csrfToken) pm.collectionVariables.set('csrfToken', data.csrfToken);"] } } ]
+        },
+        {
+          "name": "Validate CSRF token",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "url": { "raw": "{{baseUrl}}/auth/csrf-token/validate", "host": ["{{baseUrl}}"], "path": ["auth","csrf-token","validate"] },
+            "body": { "mode": "raw", "raw": "{\n  \"token\": \"{{csrfToken}}\"\n}" }
+          }
+        },
+        {
+          "name": "Revoke CSRF tokens (session)",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Authorization", "value": "Bearer {{jwt}}" }, { "key": "X-CSRF-Token", "value": "{{csrfToken}}" } ],
+            "url": { "raw": "{{baseUrl}}/auth/csrf-token/revoke-session", "host": ["{{baseUrl}}"], "path": ["auth","csrf-token","revoke-session"] }
+          }
+        },
+        {
+          "name": "Revoke CSRF tokens (all)",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Authorization", "value": "Bearer {{jwt}}" }, { "key": "X-CSRF-Token", "value": "{{csrfToken}}" } ],
+            "url": { "raw": "{{baseUrl}}/auth/csrf-token/revoke-all", "host": ["{{baseUrl}}"], "path": ["auth","csrf-token","revoke-all"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Sessions",
+      "item": [
+        {
+          "name": "Get my sessions",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Authorization", "value": "Bearer {{jwt}}" } ],
+            "url": { "raw": "{{baseUrl}}/auth/sessions", "host": ["{{baseUrl}}"], "path": ["auth","sessions"] }
+          }
+        },
+        {
+          "name": "Get session stats",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Authorization", "value": "Bearer {{jwt}}" } ],
+            "url": { "raw": "{{baseUrl}}/auth/sessions/stats", "host": ["{{baseUrl}}"], "path": ["auth","sessions","stats"] }
+          }
+        },
+        {
+          "name": "Get session activity",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Authorization", "value": "Bearer {{jwt}}" } ],
+            "url": { "raw": "{{baseUrl}}/auth/sessions/:sessionId/activity", "host": ["{{baseUrl}}"], "path": ["auth","sessions",":sessionId","activity"] }
+          }
+        },
+        {
+          "name": "Revoke a session",
+          "request": {
+            "method": "DELETE",
+            "header": [ { "key": "Authorization", "value": "Bearer {{jwt}}" }, { "key": "X-CSRF-Token", "value": "{{csrfToken}}" } ],
+            "url": { "raw": "{{baseUrl}}/auth/sessions/:sessionId", "host": ["{{baseUrl}}"], "path": ["auth","sessions",":sessionId"] }
+          }
+        },
+        {
+          "name": "Revoke other sessions",
+          "request": {
+            "method": "DELETE",
+            "header": [ { "key": "Authorization", "value": "Bearer {{jwt}}" }, { "key": "X-CSRF-Token", "value": "{{csrfToken}}" } ],
+            "url": { "raw": "{{baseUrl}}/auth/sessions/others", "host": ["{{baseUrl}}"], "path": ["auth","sessions","others"] }
+          }
+        },
+        {
+          "name": "Revoke all sessions",
+          "request": {
+            "method": "DELETE",
+            "header": [ { "key": "Authorization", "value": "Bearer {{jwt}}" }, { "key": "X-CSRF-Token", "value": "{{csrfToken}}" } ],
+            "url": { "raw": "{{baseUrl}}/auth/sessions/all", "host": ["{{baseUrl}}"], "path": ["auth","sessions","all"] }
+          }
+        },
+        {
+          "name": "Extend a session",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Authorization", "value": "Bearer {{jwt}}" }, { "key": "Content-Type", "value": "application/json" }, { "key": "X-CSRF-Token", "value": "{{csrfToken}}" } ],
+            "url": { "raw": "{{baseUrl}}/auth/sessions/:sessionId/extend", "host": ["{{baseUrl}}"], "path": ["auth","sessions",":sessionId","extend"] },
+            "body": { "mode": "raw", "raw": "{\n  \"days\": 7\n}" }
+          }
+        },
+        {
+          "name": "Get current session",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Authorization", "value": "Bearer {{jwt}}" } ],
+            "url": { "raw": "{{baseUrl}}/auth/sessions/current", "host": ["{{baseUrl}}"], "path": ["auth","sessions","current"] }
+          }
+        }
+      ]
+    }
+  ]
+}
+

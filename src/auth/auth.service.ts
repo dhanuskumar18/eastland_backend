@@ -162,6 +162,17 @@ export class AuthService {
         throw new ForbiddenException('Refresh token does not match stored token');
       }
 
+      // Validate session by jti from the refresh token payload
+      const tokenId = (payload as any)?.jti;
+      if (!tokenId) {
+        throw new ForbiddenException('Invalid refresh token (missing jti)');
+      }
+
+      const session = await this.sessionService.validateSession(tokenId, req as Request);
+      if (!session) {
+        throw new ForbiddenException('Session invalid or expired');
+      }
+
       // Generate new tokens
       return this.signTokenWithCookie(user.id, user.email, user.role.name, res, req);
     } catch (error) {

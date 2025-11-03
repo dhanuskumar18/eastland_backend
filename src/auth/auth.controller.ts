@@ -15,6 +15,7 @@ export class AuthController {
     ){}
 
     @Throttle({ short: { limit: 5, ttl: 60000 } }) // 5 attempts per minute for login
+    @SkipCsrf()
     @Post('login')
     async signin(@Body() dto: AuthDto, @Res() res: Response, @Req() req: Request){
         try {
@@ -59,7 +60,7 @@ export class AuthController {
                 });
             }
             
-            const result = await this.authService.refreshToken(refreshToken, res);
+            const result = await this.authService.refreshToken(refreshToken, res, req);
             return res.json(result);
         } catch (error) {
             // Clear invalid refresh token cookie on any error
