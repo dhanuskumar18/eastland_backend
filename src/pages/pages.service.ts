@@ -56,10 +56,12 @@ export class PagesService {
 
     if (!pageData) throw new NotFoundException('Page not found');
 
-    // If pagination is not provided, return all sections
-    const shouldPaginate = paginationDto && (paginationDto.page !== undefined || paginationDto.limit !== undefined);
+    // Check if pagination was explicitly requested
+    // If paginationDto is undefined/null or both page and limit are undefined, return all sections
+    const hasPaginationParams = paginationDto && 
+      (paginationDto.page !== undefined || paginationDto.limit !== undefined);
     
-    if (!shouldPaginate) {
+    if (!hasPaginationParams) {
       const sections = await this.db.section.findMany({
         where: { pageId: pageData.id },
         orderBy: { id: 'desc' },

@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, ParseIntPipe, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, ParseIntPipe, Query, Req } from '@nestjs/common';
+import type { Request } from 'express';
 import { PagesService } from './pages.service';
 import { CreatePageDto } from './dto/create-page.dto';
 import { UpdatePageDto } from './dto/update-page.dto';
@@ -21,9 +22,12 @@ export class PagesController {
   @Get('slug/:slug')
   findBySlug(
     @Param('slug') slug: string,
-    @Query() paginationDto?: PaginationDto,
+    @Query() paginationDto: PaginationDto,
+    @Req() req: Request,
   ) {
-    return this.pagesService.findBySlug(slug, paginationDto);
+    // Check if pagination query params were actually provided
+    const hasPaginationParams = req.query?.page !== undefined || req.query?.limit !== undefined;
+    return this.pagesService.findBySlug(slug, hasPaginationParams ? paginationDto : undefined);
   }
 
   @Get(':id')
