@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { CreateSectionDto, SectionTranslationInput } from './dto/create-section.dto';
 import { UpdateSectionDto } from './dto/update-section.dto';
+import { PaginationDto } from './dto/pagination.dto';
 
 @Injectable()
 export class SectionsService {
@@ -21,11 +22,34 @@ export class SectionsService {
     });
   }
 
-  findAll() {
-    return this.db.section.findMany({
-      orderBy: { id: 'desc' },
-      include: { translations: true, page: true },
-    });
+  async findAll(paginationDto?: PaginationDto) {
+    const page = paginationDto?.page ?? 1;
+    const limit = paginationDto?.limit ?? 10;
+    const skip = (page - 1) * limit;
+
+    const [data, total] = await Promise.all([
+      this.db.section.findMany({
+        skip,
+        take: limit,
+        orderBy: { id: 'desc' },
+        include: { translations: true, page: true },
+      }),
+      this.db.section.count(),
+    ]);
+
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+      data,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
+      },
+    };
   }
 
   async findOne(id: number) {
