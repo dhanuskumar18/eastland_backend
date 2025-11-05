@@ -6,7 +6,7 @@ generator client {
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  //directUrl = env("DIRECT_URL")
 }
         
 
@@ -84,13 +84,22 @@ model VideoCategory {
   videos   Video[]
 }
 
+// Tag type enum
+enum TagType {
+  VIDEO
+  PRODUCT
+}
+
 // General tags for various content (applies to products, videos, etc.)
 model Tag {
   id       Int       @id @default(autoincrement())
-  name     String    @unique
+  name     String    
+  type     TagType   // VIDEO or PRODUCT
   // Relations for many-to-many tagging
   products Product[] @relation("ProductTags")
   videos   Video[]   @relation("VideoTags")
+
+  @@unique([name, type]) // Unique name per type
 }
 
 // Brand or manufacturer for products
