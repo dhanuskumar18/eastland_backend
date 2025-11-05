@@ -11,84 +11,67 @@ export class CategoryService {
 
   async create(dto: CreateCategoryDto) {
     const slug = this.slugify(dto.name);
-    if (dto.for === CategoryForDto.VIDEO) {
-      return this.db.videoCategory.create({ data: { name: dto.name, slug } });
-    }
-    if (dto.for === CategoryForDto.PRODUCT) {
-      return this.db.productCategory.create({ data: { name: dto.name, slug } });
-    }
-    throw new BadRequestException('Invalid category type');
+    const type = this.mapForToType(dto.for);
+    return (this.db as any).category.create({ data: { name: dto.name, slug, type: type as any } as any });
   }
 
   async findAll(filterFor?: CategoryForDto): Promise<CategoryListItem[]> {
-    if (filterFor === CategoryForDto.VIDEO) {
-      const rows = await this.db.videoCategory.findMany({ orderBy: { id: 'desc' } });
-      return rows.map((r) => ({ ...r, for: CategoryForDto.VIDEO }));
-    }
-    if (filterFor === CategoryForDto.PRODUCT) {
-      const rows = await this.db.productCategory.findMany({ orderBy: { id: 'desc' } });
-      return rows.map((r) => ({ ...r, for: CategoryForDto.PRODUCT }));
-    }
-    const [videos, products] = await Promise.all([
-      this.db.videoCategory.findMany({ orderBy: { id: 'desc' } }),
-      this.db.productCategory.findMany({ orderBy: { id: 'desc' } }),
-    ]);
-    const list: CategoryListItem[] = [
-      ...videos.map((r) => ({ ...r, for: CategoryForDto.VIDEO })),
-      ...products.map((r) => ({ ...r, for: CategoryForDto.PRODUCT })),
-    ];
-    return list.sort((a, b) => b.id - a.id);
+    const where = filterFor ? { type: this.mapForToType(filterFor) as any } : undefined;
+    const rows = await (this.db as any).category.findMany({ where: where as any, orderBy: { id: 'desc' } });
+    return rows
+      .map((r: any) => ({ id: r.id, name: r.name, slug: r.slug, for: this.mapTypeToFor(r.type) }))
+      .sort((a, b) => b.id - a.id);
   }
 
   async findOne(id: number, forType: CategoryForDto) {
-    if (forType === CategoryForDto.VIDEO) {
-      const row = await this.db.videoCategory.findUnique({ where: { id } });
-      if (!row) throw new NotFoundException('Video category not found');
-      return row;
+    const type = this.mapForToType(forType);
+    const row = await (this.db as any).category.findFirst({ where: { id, type: type as any } as any });
+    if (!row) {
+      if (forType === CategoryForDto.VIDEO) throw new NotFoundException('Video category not found');
+      if (forType === CategoryForDto.PRODUCT) throw new NotFoundException('Product category not found');
+      throw new NotFoundException('Category not found');
     }
-    if (forType === CategoryForDto.PRODUCT) {
-      const row = await this.db.productCategory.findUnique({ where: { id } });
-      if (!row) throw new NotFoundException('Product category not found');
-      return row;
-    }
-    throw new BadRequestException('Invalid category type');
+    return row;
   }
 
   async update(id: number, dto: UpdateCategoryDto) {
-    if (!dto.for) throw new BadRequestException('Category "for" is required for update');
-    const data: { name?: string; slug?: string } = {};
-    if (dto.name) data.slug = this.slugify(dto.name), (data.name = dto.name);
-    if (dto.for === CategoryForDto.VIDEO) {
-      await this.ensureExists(id, CategoryForDto.VIDEO);
-      return this.db.videoCategory.update({ where: { id }, data });
+    const existing = await (this.db as any).category.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('Category not found');
+
+    const data: { name?: string; slug?: string; type?: any } = {};
+    if (dto.name) {
+      data.slug = this.slugify(dto.name);
+      data.name = dto.name;
     }
-    if (dto.for === CategoryForDto.PRODUCT) {
-      await this.ensureExists(id, CategoryForDto.PRODUCT);
-      return this.db.productCategory.update({ where: { id }, data });
+    if (dto.for) {
+      data.type = this.mapForToType(dto.for) as any; // allow changing type
     }
-    throw new BadRequestException('Invalid category type');
+
+    if (Object.keys(data).length === 0) return existing;
+    return (this.db as any).category.update({ where: { id }, data: data as any });
   }
 
   async remove(id: number, forType: CategoryForDto) {
-    if (forType === CategoryForDto.VIDEO) {
-      await this.ensureExists(id, forType);
-      return this.db.videoCategory.delete({ where: { id } });
+    const type = this.mapForToType(forType);
+    const exists = await (this.db as any).category.findFirst({ where: { id, type: type as any } as any, select: { id: true } });
+    if (!exists) {
+      if (forType === CategoryForDto.VIDEO) throw new NotFoundException('Video category not found');
+      if (forType === CategoryForDto.PRODUCT) throw new NotFoundException('Product category not found');
+      throw new NotFoundException('Category not found');
     }
-    if (forType === CategoryForDto.PRODUCT) {
-      await this.ensureExists(id, forType);
-      return this.db.productCategory.delete({ where: { id } });
-    }
+    return (this.db as any).category.delete({ where: { id } });
+  }
+
+  private mapForToType(forValue: CategoryForDto) {
+    if (forValue === CategoryForDto.VIDEO) return 'VIDEO';
+    if (forValue === CategoryForDto.PRODUCT) return 'PRODUCT';
     throw new BadRequestException('Invalid category type');
   }
 
-  private async ensureExists(id: number, forType: CategoryForDto) {
-    if (forType === CategoryForDto.VIDEO) {
-      const exists = await this.db.videoCategory.findUnique({ where: { id }, select: { id: true } });
-      if (!exists) throw new NotFoundException('Video category not found');
-      return;
-    }
-    const exists = await this.db.productCategory.findUnique({ where: { id }, select: { id: true } });
-    if (!exists) throw new NotFoundException('Product category not found');
+  private mapTypeToFor(type: any): CategoryForDto {
+    if (type === 'VIDEO') return CategoryForDto.VIDEO;
+    if (type === 'PRODUCT') return CategoryForDto.PRODUCT;
+    throw new BadRequestException('Invalid category type');
   }
 
   private slugify(text: string): string {

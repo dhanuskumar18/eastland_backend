@@ -45,13 +45,23 @@ export class TagsService {
   }
 
   async update(id: number, dto: UpdateTagDto) {
-    if (!dto || !dto.for) throw new BadRequestException('Tag "for" is required for update');
-    const type = this.mapForToType(dto.for) as TagType;
-    await this.ensureExists(id, type);
+    // First, find the tag by id (regardless of type) to check if it exists
+    const existingTag = await this.db.tag.findUnique({ where: { id } });
+    if (!existingTag) throw new NotFoundException('Tag not found');
     
+    // Build update payload from provided fields
     const data: any = {};
     if (dto.name) data.name = dto.name;
-    data.type = type;
+    
+    // If dto.for is provided, update the type (allows changing tag type)
+    if (dto.for) {
+      data.type = this.mapForToType(dto.for) as TagType;
+    }
+
+    // Only update if there's something to update
+    if (Object.keys(data).length === 0) {
+      return existingTag;
+    }
 
     return this.db.tag.update({ where: { id }, data });
   }

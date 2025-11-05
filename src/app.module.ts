@@ -13,6 +13,7 @@ import { PagesModule } from './pages/pages.module';
 import { SectionsModule } from './sections/sections.module';
 import { CategoryModule } from './category/category.module';
 import { TagsModule } from './tags/tags.module';
+import { BrandModule } from './brand/brand.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { TagsModule } from './tags/tags.module';
     SectionsModule,
     CategoryModule,
     TagsModule,
+    BrandModule,
     ConfigModule.forRoot({
       isGlobal: true,
     }),
