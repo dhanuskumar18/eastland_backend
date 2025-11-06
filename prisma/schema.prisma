@@ -8,6 +8,7 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+
 model Page {
   id        Int       @id @default(autoincrement())
   slug      String?   @unique
@@ -85,9 +86,13 @@ model Video {
 
 model Tag {
   id       Int       @id @default(autoincrement())
-  name     String    @unique
+  name     String
+  type     TagType
   products Product[] @relation("ProductTags")
   videos   Video[]   @relation("VideoTags")
+
+  @@unique([name, type])
+  @@index([type])
 }
 
 model Brand {
@@ -283,4 +288,9 @@ enum OtpType {
   EMAIL_VERIFICATION
   TWO_FACTOR_AUTH
   ACCOUNT_RECOVERY
+}
+
+enum TagType {
+  VIDEO
+  PRODUCT
 }
