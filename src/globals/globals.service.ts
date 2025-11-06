@@ -60,6 +60,16 @@ export class GlobalsService {
     return item;
   }
 
+  async findByName(name: string) {
+    const item = await (this.db as any).globals.findFirst({
+      where: { name },
+      include: { translations: true },
+      orderBy: { id: 'desc' },
+    });
+    if (!item) throw new NotFoundException('Global not found');
+    return item;
+  }
+
   async update(id: number, dto: UpdateGlobalDto) {
     await this.ensureExists(id);
 
