@@ -14,6 +14,7 @@ import { SectionsModule } from './sections/sections.module';
 import { CategoryModule } from './category/category.module';
 import { TagsModule } from './tags/tags.module';
 import { BrandModule } from './brand/brand.module';
+import { GlobalsModule } from './globals/globals.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { BrandModule } from './brand/brand.module';
     CategoryModule,
     TagsModule,
     BrandModule,
+    GlobalsModule,
     ConfigModule.forRoot({
       isGlobal: true,
     }),

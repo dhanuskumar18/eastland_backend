@@ -9,10 +9,10 @@ datasource db {
 
 model Page {
   id        Int       @id @default(autoincrement())
+  name      String
   slug      String?   @unique
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
-  name      String
   sections  Section[]
 
   @@index([slug])
@@ -44,12 +44,38 @@ model SectionTranslation {
   @@index([locale])
 }
 
+model globals {
+  id        Int                   @id @default(autoincrement())
+  name      String               
+  translations globalsTranslation[]
+  createdAt DateTime              @default(now())
+  updatedAt DateTime              @updatedAt
+
+}
+
+model globalsTranslation {
+  id         Int      @id @default(autoincrement())
+  globalsId  Int
+  locale     String   // e.g., "en", "es"
+  content    Json     // Rich content or structured data per locale
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  globals    globals  @relation(fields: [globalsId], references: [id], onDelete: Cascade)
+  @@unique([globalsId, locale])
+  @@index([locale])
+}
+
+
 model Video {
+  id            Int            @id @default(autoincrement())
   id            Int       @id @default(autoincrement())
   title         String
   description   String?
   embedUrl      String
   videoType     VideoType @default(VIDEO)
+  embedUrl      String
+  videoType     VideoType      @default(VIDEO)
   categoryId    Int?
   datePublished DateTime?
   createdAt     DateTime  @default(now())
@@ -57,6 +83,11 @@ model Video {
   category      Category? @relation(fields: [categoryId], references: [id])
   products      Product[] @relation("ProductVideos")
   tags          Tag[]     @relation("VideoTags")
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  category      Category?       @relation(fields: [categoryId], references: [id])
+  products      Product[]      @relation("ProductVideos")
+  tags          Tag[]          @relation("VideoTags")
 
   @@index([datePublished])
 }
@@ -74,6 +105,7 @@ model Tag {
   id       Int       @id @default(autoincrement())
   name     String
   type     TagType
+  name     String    @unique
   products Product[] @relation("ProductTags")
   videos   Video[]   @relation("VideoTags")
 
@@ -90,6 +122,8 @@ model Brand {
 model Product {
   id           Int                  @id @default(autoincrement())
   sku          String               @unique
+  id           Int                  @id @default(autoincrement())
+  sku          String               @unique
   brandId      Int
   createdAt    DateTime             @default(now())
   updatedAt    DateTime             @updatedAt
@@ -101,6 +135,20 @@ model Product {
   videos       Video[]              @relation("ProductVideos")
 
   @@index([brandId])
+}
+
+enum CategoryType {
+  VIDEO
+  PRODUCT
+}
+
+model Category {
+  id       Int       @id @default(autoincrement())
+  name     String
+  type     CategoryType @default(PRODUCT)
+  // Relations
+  videos   Video[]
+  products Product[] @relation("ProductCategories")
 }
 
 model ProductTranslation {
@@ -248,16 +296,6 @@ model CsrfToken {
 enum VideoType {
   VIDEO
   PLAYLIST
-}
-
-enum CategoryType {
-  VIDEO
-  PRODUCT
-}
-
-enum TagType {
-  VIDEO
-  PRODUCT
 }
 
 enum UserRole {
