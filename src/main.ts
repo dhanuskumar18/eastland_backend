@@ -10,6 +10,7 @@ async function bootstrap() {
   app.enableCors({
     origin: [
       'http://localhost:5002',
+      'http://localhost:5004',
       'http://localhost:3000',
       'https://eastland-website.vercel.app',
       'https://eastlandadmin.webnoxdigital.com',
