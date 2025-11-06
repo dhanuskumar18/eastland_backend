@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { DatabaseService } from '../database/database.service';
 import { CreateBrandDto } from './dto/create-brand.dto';
 import { UpdateBrandDto } from './dto/update-brand.dto';
+import { PaginationDto } from './dto/pagination.dto';
 
 @Injectable()
 export class BrandService {
@@ -12,7 +13,38 @@ export class BrandService {
     return this.db.brand.create({ data: { name: dto.name, slug } });
   }
 
-  async findAll() {
+  async findAll(paginationDto?: PaginationDto) {
+    // If pagination is provided, return paginated results
+    if (paginationDto && (paginationDto.page !== undefined || paginationDto.limit !== undefined)) {
+      const page = paginationDto.page ?? 1;
+      const limit = paginationDto.limit ?? 10;
+      const skip = (page - 1) * limit;
+
+      const [data, total] = await Promise.all([
+        this.db.brand.findMany({
+          skip,
+          take: limit,
+          orderBy: { id: 'desc' },
+        }),
+        this.db.brand.count(),
+      ]);
+
+      const totalPages = Math.ceil(total / limit);
+
+      return {
+        data,
+        meta: {
+          page,
+          limit,
+          total,
+          totalPages,
+          hasNextPage: page < totalPages,
+          hasPreviousPage: page > 1,
+        },
+      };
+    }
+
+    // Return all results if no pagination
     return this.db.brand.findMany({ orderBy: { id: 'desc' } });
   }
 

@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, NotFoundException } from '@nestjs/comm
 import { DatabaseService } from '../database/database.service';
 import { TagForDto, CreateTagDto } from './dto/create-tag.dto';
 import { UpdateTagDto } from './dto/update-tag.dto';
+import { PaginationDto } from './dto/pagination.dto';
 
 // Temporary type until migration is run and Prisma generates the enum
 type TagType = 'VIDEO' | 'PRODUCT';
@@ -23,8 +24,44 @@ export class TagsService {
     });
   }
 
-  async findAll(filterFor?: TagForDto): Promise<TagListItem[]> {
+  async findAll(filterFor?: TagForDto, paginationDto?: PaginationDto) {
     const where = filterFor ? { type: this.mapForToType(filterFor) as any } : undefined;
+    
+    // If pagination is provided, return paginated results
+    if (paginationDto && (paginationDto.page !== undefined || paginationDto.limit !== undefined)) {
+      const page = paginationDto.page ?? 1;
+      const limit = paginationDto.limit ?? 10;
+      const skip = (page - 1) * limit;
+
+      const [tags, total] = await Promise.all([
+        this.db.tag.findMany({
+          where: where as any,
+          skip,
+          take: limit,
+          orderBy: { id: 'desc' },
+        }),
+        this.db.tag.count({ where: where as any }),
+      ]);
+
+      const totalPages = Math.ceil(total / limit);
+
+      return {
+        data: tags.map((tag: any) => ({
+          ...tag,
+          for: this.mapTypeToFor(tag.type as TagType),
+        })),
+        meta: {
+          page,
+          limit,
+          total,
+          totalPages,
+          hasNextPage: page < totalPages,
+          hasPreviousPage: page > 1,
+        },
+      };
+    }
+
+    // Return all results if no pagination
     const tags = await this.db.tag.findMany({
       where: where as any,
       orderBy: { id: 'desc' },

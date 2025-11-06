@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, NotFoundException } from '@nestjs/comm
 import { DatabaseService } from '../database/database.service';
 import { CategoryForDto, CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
+import { PaginationDto } from './dto/pagination.dto';
 
 type CategoryListItem = { id: number; name: string; for: CategoryForDto };
 
@@ -14,8 +15,41 @@ export class CategoryService {
     return (this.db as any).category.create({ data: { name: dto.name, type: type as any } as any });
   }
 
-  async findAll(filterFor?: CategoryForDto): Promise<CategoryListItem[]> {
+  async findAll(filterFor?: CategoryForDto, paginationDto?: PaginationDto) {
     const where = filterFor ? { type: this.mapForToType(filterFor) as any } : undefined;
+    
+    // If pagination is provided, return paginated results
+    if (paginationDto && (paginationDto.page !== undefined || paginationDto.limit !== undefined)) {
+      const page = paginationDto.page ?? 1;
+      const limit = paginationDto.limit ?? 10;
+      const skip = (page - 1) * limit;
+
+      const [data, total] = await Promise.all([
+        (this.db as any).category.findMany({
+          where: where as any,
+          skip,
+          take: limit,
+          orderBy: { id: 'desc' },
+        }),
+        (this.db as any).category.count({ where: where as any }),
+      ]);
+
+      const totalPages = Math.ceil(total / limit);
+
+      return {
+        data: data.map((r: any) => ({ id: r.id, name: r.name, for: this.mapTypeToFor(r.type) })),
+        meta: {
+          page,
+          limit,
+          total,
+          totalPages,
+          hasNextPage: page < totalPages,
+          hasPreviousPage: page > 1,
+        },
+      };
+    }
+
+    // Return all results if no pagination
     const rows = await (this.db as any).category.findMany({ where: where as any, orderBy: { id: 'desc' } });
     return rows
       .map((r: any) => ({ id: r.id, name: r.name, for: this.mapTypeToFor(r.type) }))
