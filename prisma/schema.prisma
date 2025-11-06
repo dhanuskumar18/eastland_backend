@@ -45,37 +45,32 @@ model SectionTranslation {
 }
 
 model globals {
-  id        Int                   @id @default(autoincrement())
-  name      String               
+  id           Int                  @id @default(autoincrement())
+  name         String
   translations globalsTranslation[]
-  createdAt DateTime              @default(now())
-  updatedAt DateTime              @updatedAt
-
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
 }
 
 model globalsTranslation {
-  id         Int      @id @default(autoincrement())
-  globalsId  Int
-  locale     String   // e.g., "en", "es"
-  content    Json     // Rich content or structured data per locale
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id        Int      @id @default(autoincrement())
+  globalsId Int
+  locale    String // e.g., "en", "es"
+  content   Json // Rich content or structured data per locale
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  globals   globals  @relation(fields: [globalsId], references: [id], onDelete: Cascade)
 
-  globals    globals  @relation(fields: [globalsId], references: [id], onDelete: Cascade)
   @@unique([globalsId, locale])
   @@index([locale])
 }
 
-
 model Video {
-  id            Int            @id @default(autoincrement())
   id            Int       @id @default(autoincrement())
   title         String
   description   String?
   embedUrl      String
   videoType     VideoType @default(VIDEO)
-  embedUrl      String
-  videoType     VideoType      @default(VIDEO)
   categoryId    Int?
   datePublished DateTime?
   createdAt     DateTime  @default(now())
@@ -83,33 +78,15 @@ model Video {
   category      Category? @relation(fields: [categoryId], references: [id])
   products      Product[] @relation("ProductVideos")
   tags          Tag[]     @relation("VideoTags")
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  category      Category?       @relation(fields: [categoryId], references: [id])
-  products      Product[]      @relation("ProductVideos")
-  tags          Tag[]          @relation("VideoTags")
 
   @@index([datePublished])
 }
 
-model Category {
-  id       Int          @id @default(autoincrement())
-  name     String
-  slug     String       @unique
-  type     CategoryType @default(PRODUCT)
-  videos   Video[]
-  products Product[]    @relation("ProductCategories")
-}
-
 model Tag {
   id       Int       @id @default(autoincrement())
-  name     String
-  type     TagType
   name     String    @unique
   products Product[] @relation("ProductTags")
   videos   Video[]   @relation("VideoTags")
-
-  @@unique([name, type])
 }
 
 model Brand {
@@ -120,8 +97,6 @@ model Brand {
 }
 
 model Product {
-  id           Int                  @id @default(autoincrement())
-  sku          String               @unique
   id           Int                  @id @default(autoincrement())
   sku          String               @unique
   brandId      Int
@@ -143,12 +118,12 @@ enum CategoryType {
 }
 
 model Category {
-  id       Int       @id @default(autoincrement())
+  id       Int          @id @default(autoincrement())
   name     String
   type     CategoryType @default(PRODUCT)
   // Relations
   videos   Video[]
-  products Product[] @relation("ProductCategories")
+  products Product[]    @relation("ProductCategories")
 }
 
 model ProductTranslation {
