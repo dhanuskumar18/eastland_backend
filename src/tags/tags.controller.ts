@@ -1,7 +1,9 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, ParseIntPipe, Query, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, ParseIntPipe, Query, BadRequestException, Req } from '@nestjs/common';
+import type { Request } from 'express';
 import { TagsService } from './tags.service';
 import { TagForDto, CreateTagDto } from './dto/create-tag.dto';
 import { UpdateTagDto } from './dto/update-tag.dto';
+import { PaginationDto } from './dto/pagination.dto';
 import { SkipCsrf } from 'src/auth/csrf';
 @SkipCsrf()
 @Controller('tags')
@@ -14,9 +16,15 @@ export class TagsController {
   }
 
   @Get()
-  findAll(@Query('for') forType?: TagForDto) {
+  findAll(
+    @Query('for') forType?: TagForDto,
+    @Query() paginationDto?: PaginationDto,
+    @Req() req?: Request,
+  ) {
     const normalized = this.normalizeFor(forType);
-    return this.tagsService.findAll(normalized);
+    // Check if pagination query params were actually provided
+    const hasPaginationParams = req?.query?.page !== undefined || req?.query?.limit !== undefined;
+    return this.tagsService.findAll(normalized, hasPaginationParams ? paginationDto : undefined);
   }
 
   @Get(':id')

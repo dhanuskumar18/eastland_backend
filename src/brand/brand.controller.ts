@@ -1,7 +1,9 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, ParseIntPipe } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, ParseIntPipe, Query, Req } from '@nestjs/common';
+import type { Request } from 'express';
 import { BrandService } from './brand.service';
 import { CreateBrandDto } from './dto/create-brand.dto';
 import { UpdateBrandDto } from './dto/update-brand.dto';
+import { PaginationDto } from './dto/pagination.dto';
 import { SkipCsrf } from 'src/auth/csrf';
 
 @SkipCsrf()
@@ -15,8 +17,13 @@ export class BrandController {
   }
 
   @Get()
-  findAll() {
-    return this.service.findAll();
+  findAll(
+    @Query() paginationDto?: PaginationDto,
+    @Req() req?: Request,
+  ) {
+    // Check if pagination query params were actually provided
+    const hasPaginationParams = req?.query?.page !== undefined || req?.query?.limit !== undefined;
+    return this.service.findAll(hasPaginationParams ? paginationDto : undefined);
   }
 
   @Get(':id')

@@ -1,7 +1,9 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, ParseIntPipe, Query, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, ParseIntPipe, Query, BadRequestException, Req } from '@nestjs/common';
+import type { Request } from 'express';
 import { CategoryService } from './category.service';
 import { CategoryForDto, CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
+import { PaginationDto } from './dto/pagination.dto';
 import { SkipCsrf } from 'src/auth/csrf';
 @SkipCsrf()
 
@@ -14,9 +16,15 @@ export class CategoryController {
   }
 
   @Get()
-  findAll(@Query('for') forType?: CategoryForDto) {
+  findAll(
+    @Query('for') forType?: CategoryForDto,
+    @Query() paginationDto?: PaginationDto,
+    @Req() req?: Request,
+  ) {
     const normalized = this.normalizeFor(forType);
-    return this.service.findAll(normalized);
+    // Check if pagination query params were actually provided
+    const hasPaginationParams = req?.query?.page !== undefined || req?.query?.limit !== undefined;
+    return this.service.findAll(normalized, hasPaginationParams ? paginationDto : undefined);
   }
 
   @Get(':id')
