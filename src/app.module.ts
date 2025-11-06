@@ -11,6 +11,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { DoubleSubmitCsrfGuard } from './auth/csrf/csrf.guard';
 import { PagesModule } from './pages/pages.module';
 import { SectionsModule } from './sections/sections.module';
+import { GlobalsModule } from './globals/globals.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { SectionsModule } from './sections/sections.module';
     DatabaseModule, 
     PagesModule,
     SectionsModule,
+    GlobalsModule,
     ConfigModule.forRoot({
       isGlobal: true,
     }),
