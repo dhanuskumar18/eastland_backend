@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AppController } from './app.controller';
 import { AuthModule } from './auth/auth.module';
 import { SessionModule } from './session/session.module';
 import { EmailModule } from './email/email.module';
@@ -17,6 +18,7 @@ import { BrandModule } from './brand/brand.module';
 import { GlobalsModule } from './globals/globals.module';
 
 @Module({
+  controllers: [AppController],
   imports: [
     AuthModule,
     SessionModule,

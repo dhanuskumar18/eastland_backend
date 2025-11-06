@@ -1,0 +1,340 @@
+{
+  "info": {
+    "name": "Globals API",
+    "description": "API collection for Globals endpoints with pagination support",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000",
+      "type": "string"
+    },
+    {
+      "key": "csrfToken",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Create Global",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-CSRF-Token",
+            "value": "{{csrfToken}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"header\",\n  \"translations\": [\n    {\n      \"locale\": \"en\",\n      \"content\": {\n        \"logo\": \"https://example.com/logo.png\",\n        \"menu\": [\"Home\", \"About\", \"Contact\"]\n      }\n    },\n    {\n      \"locale\": \"es\",\n      \"content\": {\n        \"logo\": \"https://example.com/logo.png\",\n        \"menu\": [\"Inicio\", \"Acerca de\", \"Contacto\"]\n      }\n    }\n  ]\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/globals",
+          "host": ["{{baseUrl}}"],
+          "path": ["globals"]
+        },
+        "description": "Create a new global with translations. The content field can be any JSON structure."
+      },
+      "response": []
+    },
+    {
+      "name": "Get All Globals",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/globals?page=1&limit=10",
+          "host": ["{{baseUrl}}"],
+          "path": ["globals"],
+          "query": [
+            {
+              "key": "page",
+              "value": "1",
+              "description": "Page number (default: 1)"
+            },
+            {
+              "key": "limit",
+              "value": "10",
+              "description": "Items per page (default: 10, max: 100)"
+            }
+          ]
+        },
+        "description": "Get all globals with pagination. Query parameters are optional."
+      },
+      "response": []
+    },
+    {
+      "name": "Get All Globals - No Pagination",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/globals",
+          "host": ["{{baseUrl}}"],
+          "path": ["globals"]
+        },
+        "description": "Get all globals without pagination (defaults to page 1, limit 10)"
+      },
+      "response": []
+    },
+    {
+      "name": "Get Global by ID",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/globals/1",
+          "host": ["{{baseUrl}}"],
+          "path": ["globals", "1"],
+          "variable": [
+            {
+              "key": "id",
+              "value": "1"
+            }
+          ]
+        },
+        "description": "Get a specific global by its ID"
+      },
+      "response": []
+    },
+    {
+      "name": "Update Global",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-CSRF-Token",
+            "value": "{{csrfToken}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"header_updated\",\n  \"translations\": [\n    {\n      \"locale\": \"en\",\n      \"content\": {\n        \"logo\": \"https://example.com/new-logo.png\",\n        \"menu\": [\"Home\", \"About\", \"Services\", \"Contact\"]\n      }\n    },\n    {\n      \"locale\": \"fr\",\n      \"content\": {\n        \"logo\": \"https://example.com/new-logo.png\",\n        \"menu\": [\"Accueil\", \"À propos\", \"Services\", \"Contact\"]\n      }\n    }\n  ]\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/globals/1",
+          "host": ["{{baseUrl}}"],
+          "path": ["globals", "1"],
+          "variable": [
+            {
+              "key": "id",
+              "value": "1"
+            }
+          ]
+        },
+        "description": "Update a global. All fields are optional. Translations are upserted by locale."
+      },
+      "response": []
+    },
+    {
+      "name": "Update Global - Name Only",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-CSRF-Token",
+            "value": "{{csrfToken}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"footer\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/globals/1",
+          "host": ["{{baseUrl}}"],
+          "path": ["globals", "1"],
+          "variable": [
+            {
+              "key": "id",
+              "value": "1"
+            }
+          ]
+        },
+        "description": "Update only the name field"
+      },
+      "response": []
+    },
+    {
+      "name": "Update Global - Translations Only",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-CSRF-Token",
+            "value": "{{csrfToken}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"translations\": [\n    {\n      \"locale\": \"en\",\n      \"content\": {\n        \"copyright\": \"© 2024 Company\",\n        \"links\": [\"Privacy\", \"Terms\", \"Contact\"]\n      }\n    }\n  ]\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/globals/1",
+          "host": ["{{baseUrl}}"],
+          "path": ["globals", "1"],
+          "variable": [
+            {
+              "key": "id",
+              "value": "1"
+            }
+          ]
+        },
+        "description": "Update only translations. Existing translations will be updated, new locales will be created."
+      },
+      "response": []
+    },
+    {
+      "name": "Delete Global",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "X-CSRF-Token",
+            "value": "{{csrfToken}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/globals/1",
+          "host": ["{{baseUrl}}"],
+          "path": ["globals", "1"],
+          "variable": [
+            {
+              "key": "id",
+              "value": "1"
+            }
+          ]
+        },
+        "description": "Delete a global. Translations will be automatically deleted due to cascade."
+      },
+      "response": []
+    },
+    {
+      "name": "Examples",
+      "item": [
+        {
+          "name": "Create Header Global",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"header\",\n  \"translations\": [\n    {\n      \"locale\": \"en\",\n      \"content\": {\n        \"logo\": \"https://example.com/logo.png\",\n        \"menu\": [\"Home\", \"About\", \"Services\", \"Contact\"],\n        \"cta\": \"Get Started\"\n      }\n    },\n    {\n      \"locale\": \"es\",\n      \"content\": {\n        \"logo\": \"https://example.com/logo.png\",\n        \"menu\": [\"Inicio\", \"Acerca de\", \"Servicios\", \"Contacto\"],\n        \"cta\": \"Comenzar\"\n      }\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/globals",
+              "host": ["{{baseUrl}}"],
+              "path": ["globals"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Footer Global",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"footer\",\n  \"translations\": [\n    {\n      \"locale\": \"en\",\n      \"content\": {\n        \"copyright\": \"© 2024 Company Name\",\n        \"links\": [\n          {\n            \"label\": \"Privacy Policy\",\n            \"url\": \"/privacy\"\n          },\n          {\n            \"label\": \"Terms of Service\",\n            \"url\": \"/terms\"\n          },\n          {\n            \"label\": \"Contact\",\n            \"url\": \"/contact\"\n          }\n        ],\n        \"social\": {\n          \"facebook\": \"https://facebook.com/company\",\n          \"twitter\": \"https://twitter.com/company\",\n          \"linkedin\": \"https://linkedin.com/company/company\"\n        }\n      }\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/globals",
+              "host": ["{{baseUrl}}"],
+              "path": ["globals"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Site Settings Global",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"siteSettings\",\n  \"translations\": [\n    {\n      \"locale\": \"en\",\n      \"content\": {\n        \"siteName\": \"My Awesome Site\",\n        \"siteDescription\": \"The best website ever\",\n        \"contactEmail\": \"contact@example.com\",\n        \"contactPhone\": \"+1 (555) 123-4567\",\n        \"address\": {\n          \"street\": \"123 Main St\",\n          \"city\": \"New York\",\n          \"state\": \"NY\",\n          \"zip\": \"10001\",\n          \"country\": \"USA\"\n        }\n      }\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/globals",
+              "host": ["{{baseUrl}}"],
+              "path": ["globals"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Globals - Page 2",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/globals?page=2&limit=5",
+              "host": ["{{baseUrl}}"],
+              "path": ["globals"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "2"
+                },
+                {
+                  "key": "limit",
+                  "value": "5"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "description": "Common use case examples"
+    }
+  ]
+}
+
