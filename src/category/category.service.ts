@@ -3,23 +3,22 @@ import { DatabaseService } from '../database/database.service';
 import { CategoryForDto, CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 
-type CategoryListItem = { id: number; name: string; slug: string; for: CategoryForDto };
+type CategoryListItem = { id: number; name: string; for: CategoryForDto };
 
 @Injectable()
 export class CategoryService {
   constructor(private readonly db: DatabaseService) {}
 
   async create(dto: CreateCategoryDto) {
-    const slug = this.slugify(dto.name);
     const type = this.mapForToType(dto.for);
-    return (this.db as any).category.create({ data: { name: dto.name, slug, type: type as any } as any });
+    return (this.db as any).category.create({ data: { name: dto.name, type: type as any } as any });
   }
 
   async findAll(filterFor?: CategoryForDto): Promise<CategoryListItem[]> {
     const where = filterFor ? { type: this.mapForToType(filterFor) as any } : undefined;
     const rows = await (this.db as any).category.findMany({ where: where as any, orderBy: { id: 'desc' } });
     return rows
-      .map((r: any) => ({ id: r.id, name: r.name, slug: r.slug, for: this.mapTypeToFor(r.type) }))
+      .map((r: any) => ({ id: r.id, name: r.name, for: this.mapTypeToFor(r.type) }))
       .sort((a, b) => b.id - a.id);
   }
 
@@ -38,9 +37,8 @@ export class CategoryService {
     const existing = await (this.db as any).category.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('Category not found');
 
-    const data: { name?: string; slug?: string; type?: any } = {};
+    const data: { name?: string; type?: any } = {};
     if (dto.name) {
-      data.slug = this.slugify(dto.name);
       data.name = dto.name;
     }
     if (dto.for) {
@@ -72,15 +70,6 @@ export class CategoryService {
     if (type === 'VIDEO') return CategoryForDto.VIDEO;
     if (type === 'PRODUCT') return CategoryForDto.PRODUCT;
     throw new BadRequestException('Invalid category type');
-  }
-
-  private slugify(text: string): string {
-    return text
-      .toLowerCase()
-      .trim()
-      .replace(/[^a-z0-9\s-]/g, '')
-      .replace(/\s+/g, '-')
-      .replace(/-+/g, '-');
   }
 }
 
