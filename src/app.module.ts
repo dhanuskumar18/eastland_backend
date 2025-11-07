@@ -16,6 +16,7 @@ import { TagsModule } from './tags/tags.module';
 import { BrandModule } from './brand/brand.module';
 import { GlobalsModule } from './globals/globals.module';
 import { ProductsModule } from './products/products.module';
+import { UploadModule } from './upload/upload.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { ProductsModule } from './products/products.module';
     BrandModule,
     GlobalsModule,
     ProductsModule,
+    UploadModule,
     ConfigModule.forRoot({
       isGlobal: true,
     }),
