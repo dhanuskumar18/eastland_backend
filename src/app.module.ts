@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AppController } from './app.controller';
 import { AuthModule } from './auth/auth.module';
 import { SessionModule } from './session/session.module';
 import { EmailModule } from './email/email.module';
@@ -19,6 +20,7 @@ import { ProductsModule } from './products/products.module';
 import { UploadModule } from './upload/upload.module';
 
 @Module({
+  controllers: [AppController],
   imports: [
     AuthModule,
     SessionModule,

@@ -18,6 +18,11 @@ export class GlobalsController {
     return this.globalsService.findAll(paginationDto);
   }
 
+  @Get('name/:name')
+  findByName(@Param('name') name: string) {
+    return this.globalsService.findByName(name);
+  }
+
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.globalsService.findOne(id);

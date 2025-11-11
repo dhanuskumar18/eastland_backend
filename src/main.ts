@@ -12,6 +12,10 @@ async function bootstrap() {
   app.enableCors({
     origin: [
       'http://localhost:5002',
+      'http://localhost:5004',
+      'http://localhost:3000',
+      'https://eastland-website.vercel.app',
+      'https://eastlandadmin.webnoxdigital.com',
       'http://localhost:8000',
       'http://localhost:3001',
       'http://localhost:5173', // Vite default port
@@ -61,8 +65,8 @@ async function bootstrap() {
       stopAtFirstError: false,
     }
   ));
-  const port = process.env.PORT ?? 5000;
-  await app.listen(port);
-  console.log(`🚀 Application is running on: http://localhost:${port}`);
+  const port = process.env.PORT || 5003;
+  await app.listen(port, '0.0.0.0');
+  console.log(`🚀 Application is running on: http://0.0.0.0:${port}`);
 }
 bootstrap();
