@@ -10,7 +10,9 @@ export class UpdateUserDto {
   @IsOptional()
   email?: string;
 
-  @IsEnum(UserRole)
+  @IsEnum(UserRole, {
+    message: 'Role must be either USER or ADMIN',
+  })
   @IsOptional()
   role?: UserRole;
 }

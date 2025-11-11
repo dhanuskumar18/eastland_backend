@@ -53,10 +53,12 @@ async function bootstrap() {
   app.useGlobalPipes(new ValidationPipe(
     {
       whitelist: true,
+      forbidNonWhitelisted: true,
       transform: true,
       transformOptions: {
         enableImplicitConversion: true,
       },
+      stopAtFirstError: false,
     }
   ));
   const port = process.env.PORT ?? 5000;

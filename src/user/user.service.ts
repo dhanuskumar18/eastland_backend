@@ -33,7 +33,7 @@ export class UserService {
           email: dto.email,
           password: hash,
           roleId: role.id,
-          status: 'ACTIVE',
+          status: dto.status || 'ACTIVE',
         },
         select: {
           id: true,
