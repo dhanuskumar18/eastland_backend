@@ -18,13 +18,20 @@ export class TagsController {
   @Get()
   findAll(
     @Query('for') forType?: TagForDto,
-    @Query() paginationDto?: PaginationDto,
+    @Query('page', new ParseIntPipe({ optional: true })) page?: number,
+    @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
     @Req() req?: Request,
   ) {
     const normalized = this.normalizeFor(forType);
     // Check if pagination query params were actually provided
     const hasPaginationParams = req?.query?.page !== undefined || req?.query?.limit !== undefined;
-    return this.tagsService.findAll(normalized, hasPaginationParams ? paginationDto : undefined);
+    const paginationDto: PaginationDto | undefined = hasPaginationParams
+      ? {
+          page: page ?? 1,
+          limit: limit ?? 10,
+        }
+      : undefined;
+    return this.tagsService.findAll(normalized, paginationDto);
   }
 
   @Get(':id')
