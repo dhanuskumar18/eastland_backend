@@ -1,5 +1,5 @@
 import { IsEmail, IsOptional, IsString, IsEnum } from 'class-validator';
-import { UserRole } from '@prisma/client';
+import { UserRole, UserStatus } from '@prisma/client';
 
 export class UpdateUserDto {
   @IsString()
@@ -15,6 +15,12 @@ export class UpdateUserDto {
   })
   @IsOptional()
   role?: UserRole;
+
+  @IsEnum(UserStatus, {
+    message: 'Status must be either ACTIVE or INACTIVE',
+  })
+  @IsOptional()
+  status?: UserStatus;
 }
 
 

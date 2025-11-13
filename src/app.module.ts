@@ -10,6 +10,7 @@ import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
 import { APP_GUARD } from '@nestjs/core';
 import { DoubleSubmitCsrfGuard } from './auth/csrf/csrf.guard';
+import { UserStatusGuard } from './auth/guard/user-status.guard';
 import { PagesModule } from './pages/pages.module';
 import { SectionsModule } from './sections/sections.module';
 import { CategoryModule } from './category/category.module';
@@ -18,6 +19,7 @@ import { BrandModule } from './brand/brand.module';
 import { GlobalsModule } from './globals/globals.module';
 import { ProductsModule } from './products/products.module';
 import { UploadModule } from './upload/upload.module';
+import { SeoModule } from './seo/seo.module';
 
 @Module({
   controllers: [AppController],
@@ -35,6 +37,7 @@ import { UploadModule } from './upload/upload.module';
     GlobalsModule,
     ProductsModule,
     UploadModule,
+    SeoModule,
     ConfigModule.forRoot({
       isGlobal: true,
     }),
@@ -65,6 +68,10 @@ import { UploadModule } from './upload/upload.module';
     {
       provide: APP_GUARD,
       useClass: DoubleSubmitCsrfGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: UserStatusGuard,
     },
   ],
 })

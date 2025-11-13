@@ -6,6 +6,7 @@ import { ToggleStatusDto } from './dto/toggle-status.dto';
 import { PaginationDto } from '../brand/dto/pagination.dto';
 import * as argon from '@node-rs/argon2';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
+import { UserStatus } from '@prisma/client';
 
 @Injectable()
 export class UserService {
@@ -149,7 +150,7 @@ export class UserService {
     const existing = await this.db.user.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('User not found');
 
-    const data: { name?: string; email?: string; roleId?: number } = {};
+    const data: { name?: string; email?: string; roleId?: number; status?: UserStatus } = {};
 
     if (dto.name !== undefined) {
       data.name = dto.name;
@@ -157,6 +158,10 @@ export class UserService {
 
     if (dto.email !== undefined) {
       data.email = dto.email;
+    }
+
+    if (dto.status !== undefined) {
+      data.status = dto.status;
     }
 
     if (dto.role !== undefined) {

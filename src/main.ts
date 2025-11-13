@@ -8,6 +8,10 @@ import { join } from 'path';
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   
+  // Note: Global prefix removed to maintain backward compatibility
+  // SEO routes use 'api/seo' prefix in controller
+  // Other routes remain at their original paths (e.g., /auth/login)
+  
   // CORS Configuration
   app.enableCors({
     origin: [

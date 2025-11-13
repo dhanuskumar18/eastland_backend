@@ -40,7 +40,23 @@ export class AuthController {
       const result = await this.authService.signin(dto, res, req);
       return res.json(result);
     } catch (error) {
+      // Handle ForbiddenException with custom error object
+      if (error instanceof ForbiddenException) {
+        const errorResponse = error.getResponse();
+        if (typeof errorResponse === 'object' && errorResponse !== null && 'code' in errorResponse) {
+          return res.status(403).json({
+            success: false,
+            ...(errorResponse as any),
+          });
+        }
+        return res.status(403).json({
+          success: false,
+          message: error.message || 'Forbidden',
+          statusCode: 403,
+        });
+      }
       return res.status(error.status || 500).json({
+        success: false,
         message: error.message || "Internal server error",
         statusCode: error.status || 500,
       });

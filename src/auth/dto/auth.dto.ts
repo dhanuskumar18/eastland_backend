@@ -22,6 +22,10 @@ export class SignupDto extends AuthDto {
 export class TokenResponseDto {
     access_token: string;
     role: string;
+    status: string;
+    userId: number;
+    firstName: string;
+    lastName: string;
 }
 
 // RefreshTokenDto is no longer needed as we'll read from cookies

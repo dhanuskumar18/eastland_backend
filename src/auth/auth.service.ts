@@ -37,14 +37,24 @@ export class AuthService {
     if (!pwMatches) {
       throw new ForbiddenException('Credentials incorrect');
     }
-    return this.signTokenWithCookie(user.id, user.email, user.role.name, res, req);
+
+    // Check if user status is ACTIVE
+    if (user.status === 'INACTIVE') {
+      throw new ForbiddenException({
+        message: 'Your account is inactive. Please contact administrator.',
+        code: 'ACCOUNT_INACTIVE',
+        status: 'INACTIVE',
+      });
+    }
+
+    return this.signTokenWithCookie(user, res, req);
    }
 
-    async signTokenWithCookie(userId: number, email: string, role: string, res: Response, req?: Request): Promise<TokenResponseDto> {
+    async signTokenWithCookie(user: { id: number; email: string; name: string | null; status: string; role: { name: string } }, res: Response, req?: Request): Promise<TokenResponseDto> {
       const tokenId = crypto.randomUUID(); // Generate unique token ID for session tracking
       const payload = {
-        sub: userId,
-        email,
+        sub: user.id,
+        email: user.email,
         jti: tokenId, // JWT ID for session tracking
       };
       
@@ -62,13 +72,13 @@ export class AuthService {
 
       // Create session if request is available
       if (req) {
-        await this.sessionService.createSession(userId, tokenId, req);
+        await this.sessionService.createSession(user.id, tokenId, req);
       }
 
       // Hash and store refresh token in database (for backward compatibility)
       const hashedRefreshToken = await argon.hash(refreshToken);
       await this.prisma.user.update({
-        where: { id: userId },
+        where: { id: user.id },
         data: { refreshToken: hashedRefreshToken },
       });
 
@@ -80,9 +90,18 @@ export class AuthService {
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
       });
 
+      // Parse name into firstName and lastName if available
+      const nameParts = user.name ? user.name.split(' ') : [];
+      const firstName = nameParts[0] || '';
+      const lastName = nameParts.slice(1).join(' ') || '';
+
       return {
         access_token: accessToken,
-        role: role,
+        role: user.role.name,
+        status: user.status,
+        userId: user.id,
+        firstName: firstName,
+        lastName: lastName,
       };
     }
 
@@ -112,17 +131,11 @@ export class AuthService {
           password: hash,
           roleId: role.id,
         },
-        select: {
-          id: true,
-          email: true,
-          role: {
-            select: {
-              name: true,
-            },
-          },
+        include: {
+          role: true,
         },
       });
-      return this.signTokenWithCookie(user.id, user.email, user.role.name, res, req);
+      return this.signTokenWithCookie(user, res, req);
     } catch (error) {
       if (error instanceof PrismaClientKnownRequestError) {
         if (error.code === 'P2002') {
@@ -152,6 +165,15 @@ export class AuthService {
         throw new ForbiddenException('User not found for refresh token');
       }
 
+      // Check if user status is INACTIVE
+      if (user.status === 'INACTIVE') {
+        throw new ForbiddenException({
+          message: 'Your account is inactive. Please contact administrator.',
+          code: 'ACCOUNT_INACTIVE',
+          status: 'INACTIVE',
+        });
+      }
+
       if (!user.refreshToken) {
         throw new ForbiddenException('No refresh token stored for user');
       }
@@ -174,7 +196,7 @@ export class AuthService {
       }
 
       // Generate new tokens
-      return this.signTokenWithCookie(user.id, user.email, user.role.name, res, req);
+      return this.signTokenWithCookie(user, res, req);
     } catch (error) {
       // Handle JWT verification errors specifically
       if (error.name === 'JsonWebTokenError') {

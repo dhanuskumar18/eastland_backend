@@ -7,11 +7,13 @@ import { ConfigModule, ConfigService } from "@nestjs/config";
 import { SessionModule } from "../session/session.module";
 import { EmailModule } from "../email/email.module";
 import { CsrfService } from "./csrf";
+import { DatabaseModule } from "../database/database.module";
 
 @Module({
     imports:[
         forwardRef(() => SessionModule), // Use forwardRef to break circular dependency
         EmailModule, // Import the email module
+        DatabaseModule, // Import database module for UserStatusGuard
         JwtModule.registerAsync({
             imports: [ConfigModule],
             useFactory: async (config: ConfigService) => ({

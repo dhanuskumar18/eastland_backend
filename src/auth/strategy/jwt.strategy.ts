@@ -30,6 +30,18 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
             throw new UnauthorizedException('User not found');
         }
 
+        // Check if user status is INACTIVE
+        // Note: This check happens here, but UserStatusGuard will also check on every request
+        // for real-time status updates
+        if (user.status === 'INACTIVE') {
+            throw new UnauthorizedException({
+                success: false,
+                message: 'Your account has been deactivated. Please contact administrator.',
+                code: 'USER_INACTIVE',
+                status: 'INACTIVE',
+            });
+        }
+
         // If JWT has a token ID, validate the session
         if (payload.jti) {
             const session = await this.sessionService.validateSession(payload.jti, req);

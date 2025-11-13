@@ -28,6 +28,7 @@ model Section {
   updatedAt    DateTime             @updatedAt
   page         Page                 @relation(fields: [pageId], references: [id], onDelete: Cascade)
   translations SectionTranslation[]
+  lazyLoading  SeoSectionLazyLoading?
 
   @@unique([pageId, name])
   @@index([pageId])
@@ -267,6 +268,30 @@ model CsrfToken {
   @@index([sessionId])
   @@index([userId])
   @@index([expiresAt])
+}
+
+model SeoLazyLoadingSettings {
+  id                Int      @id @default(autoincrement())
+  enabled           String   @default("disable") // 'enable' or 'disable'
+  whereToApply      String   @default("all-images")
+  metaKeywords      String?
+  preloadThreshold  String?
+  loadingAttribute  String   @default("lazy") // 'lazy', 'eager', 'auto'
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+}
+
+model SeoSectionLazyLoading {
+  id                Int      @id @default(autoincrement())
+  sectionId         Int      @unique
+  enabled           Boolean  @default(false)
+  loadingAttribute  String   @default("lazy") // 'lazy', 'eager', 'auto'
+  preloadThreshold  String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  section           Section  @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+
+  @@index([sectionId])
 }
 
 enum CategoryType {
