@@ -86,21 +86,23 @@ model Video {
 }
 
 model Tag {
-  id       Int       @id @default(autoincrement())
-  name     String
-  type     TagType
-  products Product[] @relation("ProductTags")
-  videos   Video[]   @relation("VideoTags")
+  id            Int            @id @default(autoincrement())
+  name          String
+  type          TagType
+  products      Product[]      @relation("ProductTags")
+  videos        Video[]        @relation("VideoTags")
+  youtubeVideos YouTubeVideo[] @relation("YouTubeVideoTags")
 
   @@unique([name, type])
   @@index([type])
 }
 
 model Brand {
-  id       Int       @id @default(autoincrement())
-  name     String    @unique
-  slug     String    @unique
-  products Product[]
+  id           Int            @id @default(autoincrement())
+  name         String         @unique
+  slug         String         @unique
+  products     Product[]
+  youtubeVideos YouTubeVideo[]
 }
 
 model Product {
@@ -120,11 +122,12 @@ model Product {
 }
 
 model Category {
-  id       Int          @id @default(autoincrement())
-  name     String
-  type     CategoryType @default(PRODUCT)
-  videos   Video[]
-  products Product[]    @relation("ProductCategories")
+  id            Int            @id @default(autoincrement())
+  name          String
+  type          CategoryType   @default(PRODUCT)
+  videos        Video[]
+  products      Product[]      @relation("ProductCategories")
+  youtubeVideos YouTubeVideo[] @relation("YouTubeVideoCategories")
 }
 
 model ProductTranslation {
@@ -165,6 +168,53 @@ model Testimonial {
   imageUrl    String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model YouTubeVideo {
+  id            Int                      @id @default(autoincrement())
+  youtubeLink   String
+  brandId       Int
+  createdAt     DateTime                 @default(now())
+  updatedAt     DateTime                 @updatedAt
+  brand         Brand                    @relation(fields: [brandId], references: [id])
+  translations  YouTubeVideoTranslation[]
+  categories    Category[]               @relation("YouTubeVideoCategories")
+  tags          Tag[]                    @relation("YouTubeVideoTags")
+  images        YouTubeVideoImage[]
+
+  @@index([youtubeLink])
+  @@index([brandId])
+}
+
+model YouTubeVideoTranslation {
+  id             Int          @id @default(autoincrement())
+  youtubeVideoId Int
+  locale         String
+  name           String
+  description    String
+  seoTitle       String?
+  seoDescription String?
+  canonicalUrl   String?
+  version        Int          @default(1)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  youtubeVideo   YouTubeVideo @relation(fields: [youtubeVideoId], references: [id], onDelete: Cascade)
+
+  @@unique([youtubeVideoId, locale])
+  @@index([locale])
+}
+
+model YouTubeVideoImage {
+  id             Int          @id @default(autoincrement())
+  youtubeVideoId Int
+  url            String
+  alt            String?
+  width          Int?
+  height         Int?
+  position       Int?
+  youtubeVideo   YouTubeVideo @relation(fields: [youtubeVideoId], references: [id], onDelete: Cascade)
+
+  @@index([youtubeVideoId])
 }
 
 model ContactSubmission {

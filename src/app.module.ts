@@ -21,6 +21,7 @@ import { ProductsModule } from './products/products.module';
 import { UploadModule } from './upload/upload.module';
 import { SeoModule } from './seo/seo.module';
 import { TestimonialsModule } from './testimonials/testimonials.module';
+import { YouTubeVideosModule } from './youtube-videos/youtube-videos.module';
 
 @Module({
   controllers: [AppController],
@@ -40,6 +41,7 @@ import { TestimonialsModule } from './testimonials/testimonials.module';
     UploadModule,
     SeoModule,
     TestimonialsModule,
+    YouTubeVideosModule,
     ConfigModule.forRoot({
       isGlobal: true,
     }),
