@@ -159,9 +159,10 @@ model ProductImage {
 
 model Testimonial {
   id          Int      @id @default(autoincrement())
-  content     String
-  author      String
-  isPublished Boolean  @default(false)
+  clientName  String
+  profession  String
+  review      String
+  imageUrl    String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }

@@ -20,6 +20,7 @@ import { GlobalsModule } from './globals/globals.module';
 import { ProductsModule } from './products/products.module';
 import { UploadModule } from './upload/upload.module';
 import { SeoModule } from './seo/seo.module';
+import { TestimonialsModule } from './testimonials/testimonials.module';
 
 @Module({
   controllers: [AppController],
@@ -38,6 +39,7 @@ import { SeoModule } from './seo/seo.module';
     ProductsModule,
     UploadModule,
     SeoModule,
+    TestimonialsModule,
     ConfigModule.forRoot({
       isGlobal: true,
     }),
