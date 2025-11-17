@@ -218,13 +218,14 @@ model YouTubeVideoImage {
 }
 
 model ContactSubmission {
-  id        Int      @id @default(autoincrement())
-  name      String
-  email     String
-  phone     String?
-  subject   String?
-  message   String
-  createdAt DateTime @default(now())
+  id           Int       @id @default(autoincrement())
+  name         String
+  email        String
+  phone        String?
+  subject      String?
+  message      String
+  customFields String?   @db.Text
+  createdAt    DateTime  @default(now())
 }
 
 model User {
