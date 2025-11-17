@@ -3,10 +3,14 @@ import { DatabaseService } from '../database/database.service';
 import { CreatePageDto } from './dto/create-page.dto';
 import { UpdatePageDto } from './dto/update-page.dto';
 import { PaginationDto } from './dto/pagination.dto';
+import { YouTubeVideosService } from '../youtube-videos/youtube-videos.service';
 
 @Injectable()
 export class PagesService {
-  constructor(private readonly db: DatabaseService) {}
+  constructor(
+    private readonly db: DatabaseService,
+    private readonly youtubeVideosService: YouTubeVideosService,
+  ) {}
 
   create(dto: CreatePageDto) {
     return this.db.page.create({ data: dto });
@@ -68,12 +72,15 @@ export class PagesService {
         include: { translations: true },
       });
 
+      // Enrich video sections with brand information
+      const enrichedSections = await this.enrichVideoSections(sections);
+
       return {
         ...pageData,
         sections: {
-          data: sections,
+          data: enrichedSections,
           meta: {
-            total: sections.length,
+            total: enrichedSections.length,
           },
         },
       };
@@ -97,10 +104,13 @@ export class PagesService {
 
     const totalPages = Math.ceil(totalSections / limit);
 
+    // Enrich video sections with brand information
+    const enrichedSections = await this.enrichVideoSections(sections);
+
     return {
       ...pageData,
       sections: {
-        data: sections,
+        data: enrichedSections,
         meta: {
           page,
           limit,
@@ -144,10 +154,13 @@ export class PagesService {
 
     const totalPages = Math.ceil(totalSections / limit);
 
+    // Enrich video sections with brand information
+    const enrichedSections = await this.enrichVideoSections(sections);
+
     return {
       ...pageData,
       sections: {
-        data: sections,
+        data: enrichedSections,
         meta: {
           page,
           limit,
@@ -174,6 +187,85 @@ export class PagesService {
   private async ensureExists(id: number) {
     const exists = await this.db.page.findUnique({ where: { id }, select: { id: true } });
     if (!exists) throw new NotFoundException('Page not found');
+  }
+
+  /**
+   * Enrich video sections with brand information from YouTube videos
+   */
+  private async enrichVideoSections(sections: any[]): Promise<any[]> {
+    const enrichedSections = await Promise.all(
+      sections.map(async (section) => {
+        // Only process video sections
+        if (section.name !== 'video') {
+          return section;
+        }
+
+        // Process each translation
+        const enrichedTranslations = await Promise.all(
+          (section.translations || []).map(async (translation: any) => {
+            const content = translation.content || {};
+            const videos = content.videos || [];
+
+            // Enrich each video with brand information
+            const enrichedVideos = await Promise.all(
+              videos.map(async (video: any) => {
+                // If video already has brand, skip
+                if (video.brand || video.brandName) {
+                  return video;
+                }
+
+                // If video has youtubeVideoId, fetch brand information
+                if (video.youtubeVideoId) {
+                  try {
+                    const youtubeVideo = await this.youtubeVideosService.findOne(video.youtubeVideoId);
+                    // Extract brand name from the response
+                    // The brand can be an object with { id, name, slug } or just a name string
+                    let brandName = '';
+                    if (youtubeVideo?.brand) {
+                      if (typeof youtubeVideo.brand === 'object' && youtubeVideo.brand.name) {
+                        brandName = youtubeVideo.brand.name;
+                      } else if (typeof youtubeVideo.brand === 'string') {
+                        brandName = youtubeVideo.brand;
+                      }
+                    } else if (youtubeVideo?.brandName) {
+                      brandName = youtubeVideo.brandName;
+                    }
+                    
+                    if (brandName) {
+                      return {
+                        ...video,
+                        brand: brandName,
+                        brandName: brandName,
+                      };
+                    }
+                  } catch (error) {
+                    // If video not found or error, return original video
+                    console.error(`Error fetching brand for video ${video.youtubeVideoId}:`, error);
+                  }
+                }
+
+                return video;
+              })
+            );
+
+            return {
+              ...translation,
+              content: {
+                ...content,
+                videos: enrichedVideos,
+              },
+            };
+          })
+        );
+
+        return {
+          ...section,
+          translations: enrichedTranslations,
+        };
+      })
+    );
+
+    return enrichedSections;
   }
 }
 
