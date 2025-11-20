@@ -1,5 +1,5 @@
 import { ForbiddenException, Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { AuthDto, SignupDto, TokenResponseDto, ForgotPasswordDto, ResetPasswordDto, VerifyOtpDto } from './dto';
+import { AuthDto, SignupDto, TokenResponseDto, ForgotPasswordDto, ResetPasswordDto, VerifyOtpDto, ChangePasswordDto, UpdateProfileDto } from './dto';
 import * as argon from '@node-rs/argon2';
 import { DatabaseService } from 'src/database/database.service';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
@@ -8,6 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import { EmailService } from '../email/email.service';
 import { SessionService } from '../session/session.service';
 import { DeviceDetectionService } from '../session/device-detection.service';
+import { MfaService } from './mfa.service';
 import type { Response, Request } from 'express';
 import * as crypto from 'crypto';
 
@@ -20,6 +21,7 @@ export class AuthService {
     private emailService: EmailService,
     private sessionService: SessionService,
     private deviceDetection: DeviceDetectionService,
+    private mfaService: MfaService,
   ) {}
   async signin(dto: AuthDto, res: Response, req: Request) {
     const user = await this.prisma.user.findUnique({
@@ -45,6 +47,17 @@ export class AuthService {
         code: 'ACCOUNT_INACTIVE',
         status: 'INACTIVE',
       });
+    }
+
+    // Check if MFA is enabled for this user
+    if (user.mfaEnabled) {
+      // Return response indicating MFA verification is required
+      return {
+        requiresMfa: true,
+        message: 'MFA verification required',
+        userId: user.id,
+        email: user.email,
+      } as any;
     }
 
     return this.signTokenWithCookie(user, res, req);
@@ -453,5 +466,187 @@ export class AuthService {
     });
 
     return { message: 'Logged out successfully' };
+  }
+
+  /**
+   * Get client profile
+   */
+  async getClientProfile(userId: number) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        status: true,
+        createdAt: true,
+        updatedAt: true,
+        role: {
+          select: {
+            name: true,
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    return user;
+  }
+
+  /**
+   * Update client profile
+   */
+  async updateClientProfile(userId: number, dto: UpdateProfileDto) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const updateData: { name?: string; email?: string } = {};
+
+    if (dto.name !== undefined) {
+      updateData.name = dto.name;
+    }
+
+    if (dto.email !== undefined && dto.email !== user.email) {
+      // Check if email is already taken
+      const existingUser = await this.prisma.user.findUnique({
+        where: { email: dto.email },
+      });
+
+      if (existingUser && existingUser.id !== userId) {
+        throw new BadRequestException('Email already in use');
+      }
+
+      updateData.email = dto.email;
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      return this.getClientProfile(userId);
+    }
+
+    try {
+      const updated = await this.prisma.user.update({
+        where: { id: userId },
+        data: updateData,
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+          role: {
+            select: {
+              name: true,
+            },
+          },
+        },
+      });
+
+      return {
+        success: true,
+        message: 'Profile updated successfully',
+        data: updated,
+      };
+    } catch (error) {
+      if (error instanceof PrismaClientKnownRequestError) {
+        if (error.code === 'P2002') {
+          throw new BadRequestException('Email already in use');
+        }
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Change password
+   */
+  async changePassword(userId: number, dto: ChangePasswordDto) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Verify current password
+    const pwMatches = await argon.verify(user.password, dto.currentPassword);
+    if (!pwMatches) {
+      throw new ForbiddenException('Current password is incorrect');
+    }
+
+    // Check if new password matches confirm password
+    if (dto.newPassword !== dto.confirmPassword) {
+      throw new BadRequestException('New password and confirm password do not match');
+    }
+
+    // Check if new password is different from current password
+    const isSamePassword = await argon.verify(user.password, dto.newPassword);
+    if (isSamePassword) {
+      throw new BadRequestException('New password must be different from current password');
+    }
+
+    // Hash new password
+    const hashedPassword = await argon.hash(dto.newPassword);
+
+    // Update password and invalidate all refresh tokens
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        password: hashedPassword,
+        refreshToken: null, // Invalidate all refresh tokens
+      },
+    });
+
+    return {
+      success: true,
+      message: 'Password changed successfully',
+    };
+  }
+
+  /**
+   * Verify MFA token during login and complete authentication
+   */
+  async verifyLoginMfa(email: string, token: string, res: Response, req: Request) {
+    // Find user by email
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      include: { role: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Check if user status is ACTIVE
+    if (user.status === 'INACTIVE') {
+      throw new ForbiddenException({
+        message: 'Your account is inactive. Please contact administrator.',
+        code: 'ACCOUNT_INACTIVE',
+        status: 'INACTIVE',
+      });
+    }
+
+    // Check if MFA is enabled
+    if (!user.mfaEnabled) {
+      throw new BadRequestException('MFA is not enabled for this account');
+    }
+
+    // Verify MFA token
+    const isValid = await this.mfaService.verifyMfaToken(user.id, token);
+    if (!isValid) {
+      throw new ForbiddenException('Invalid MFA code');
+    }
+
+    // MFA verified, complete login
+    return this.signTokenWithCookie(user, res, req);
   }
 }

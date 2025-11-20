@@ -1,6 +1,7 @@
 import { Module, forwardRef } from "@nestjs/common";
 import { AuthController } from "./auth.controller";
 import { AuthService } from "./auth.service";
+import { MfaService } from "./mfa.service";
 import { JwtModule } from "@nestjs/jwt";
 import { JwtStrategy } from "./strategy";
 import { ConfigModule, ConfigService } from "@nestjs/config";
@@ -24,7 +25,7 @@ import { DatabaseModule } from "../database/database.module";
         }),
     ],
     controllers:[AuthController],
-    providers:[AuthService, JwtStrategy, CsrfService],
-    exports: [CsrfService], // Export CSRF service for use in other modules
+    providers:[AuthService, JwtStrategy, CsrfService, MfaService],
+    exports: [CsrfService, MfaService], // Export CSRF service and MFA service for use in other modules
 })
 export class AuthModule {}

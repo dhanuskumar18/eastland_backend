@@ -14,12 +14,18 @@ export class CsrfMiddleware implements NestMiddleware {
       return next();
     }
 
-    // Skip CSRF for certain paths (like getting CSRF tokens)
+    // Skip CSRF for certain paths (like getting CSRF tokens and login endpoints)
     const skipPaths = [
       '/auth/csrf-token',
       '/auth/csrf-token/authenticated',
       '/auth/csrf-token/double-submit',
       '/auth/csrf-token/validate',
+      '/auth/login',
+      '/auth/login/verify-mfa', // MFA verification during login (user not authenticated yet)
+      '/auth/signup',
+      '/auth/forgot-password',
+      '/auth/verify-otp',
+      '/auth/reset-password',
     ];
 
     if (skipPaths.some(path => req.path.startsWith(path))) {

@@ -7,14 +7,22 @@ import {
   Req,
   ForbiddenException,
   Get,
+  Put,
 } from "@nestjs/common";
 import { AuthService } from "./auth.service";
+import { MfaService } from "./mfa.service";
 import {
   AuthDto,
   SignupDto,
   ForgotPasswordDto,
   ResetPasswordDto,
   VerifyOtpDto,
+  EnableMfaDto,
+  VerifyMfaDto,
+  DisableMfaDto,
+  ChangePasswordDto,
+  UpdateProfileDto,
+  VerifyLoginMfaDto,
 } from "./dto";
 import { JwtGuard } from "./guard";
 import { GetUser } from "./decorator";
@@ -26,7 +34,8 @@ import type { Response, Request } from "express";
 export class AuthController {
   constructor(
     private authService: AuthService,
-    private csrfService: CsrfService
+    private csrfService: CsrfService,
+    private mfaService: MfaService
   ) {}
 
   @Throttle({ short: { limit: 5, ttl: 60000 } }) // 5 attempts per minute for login
@@ -38,6 +47,15 @@ export class AuthController {
   ) {
     try {
       const result = await this.authService.signin(dto, res, req);
+      // If MFA is required, return the requiresMfa response
+      if (result && (result as any).requiresMfa === true) {
+        return res.json({
+          requiresMfa: true,
+          message: 'MFA verification required',
+          userId: (result as any).userId,
+          email: (result as any).email,
+        });
+      }
       return res.json(result);
     } catch (error) {
       // Handle ForbiddenException with custom error object
@@ -373,5 +391,114 @@ export class AuthController {
       secure: process.env.NODE_ENV === "production",
       sameSite: "strict",
     });
+  }
+
+  // MFA Endpoints
+
+  @UseGuards(JwtGuard)
+  @Get("mfa/status")
+  async getMfaStatus(@GetUser("id") userId: number) {
+    const status = await this.mfaService.getMfaStatus(userId);
+    return {
+      success: true,
+      data: status,
+    };
+  }
+
+  @UseGuards(JwtGuard)
+  @Post("mfa/generate")
+  async generateMfaSecret(
+    @GetUser("id") userId: number,
+    @GetUser("email") email: string
+  ) {
+    return this.mfaService.generateMfaSecret(userId, email);
+  }
+
+  @UseGuards(JwtGuard)
+  @Post("mfa/enable")
+  async enableMfa(
+    @GetUser("id") userId: number,
+    @Body() dto: EnableMfaDto
+  ) {
+    return this.mfaService.enableMfa(userId, dto.token);
+  }
+
+  @UseGuards(JwtGuard)
+  @Post("mfa/disable")
+  async disableMfa(
+    @GetUser("id") userId: number,
+    @Body() dto: DisableMfaDto
+  ) {
+    const result = await this.mfaService.disableMfa(userId, dto.password);
+    return {
+      success: true,
+      ...result,
+    };
+  }
+
+
+  // Profile and Password Endpoints
+
+  @UseGuards(JwtGuard)
+  @Get("client-profile")
+  async getClientProfile(@GetUser("id") userId: number) {
+    const user = await this.authService.getClientProfile(userId);
+    return {
+      success: true,
+      data: user,
+    };
+  }
+
+  @UseGuards(JwtGuard)
+  @Put("client-profile")
+  async updateClientProfile(
+    @GetUser("id") userId: number,
+    @Body() dto: UpdateProfileDto
+  ) {
+    return this.authService.updateClientProfile(userId, dto);
+  }
+
+  @UseGuards(JwtGuard)
+  @Post("change-password")
+  async changePassword(
+    @GetUser("id") userId: number,
+    @Body() dto: ChangePasswordDto
+  ) {
+    return this.authService.changePassword(userId, dto);
+  }
+
+  // MFA Login Verification
+  @SkipCsrf() // Skip CSRF for login MFA verification (user not authenticated yet)
+  @Throttle({ short: { limit: 5, ttl: 60000 } }) // 5 attempts per minute
+  @Post("login/verify-mfa")
+  async verifyLoginMfa(
+    @Body() dto: VerifyLoginMfaDto,
+    @Res() res: Response,
+    @Req() req: Request
+  ) {
+    try {
+      const result = await this.authService.verifyLoginMfa(dto.email, dto.token, res, req);
+      return res.json(result);
+    } catch (error) {
+      if (error instanceof ForbiddenException) {
+        const errorResponse = error.getResponse();
+        if (typeof errorResponse === 'object' && errorResponse !== null && 'code' in errorResponse) {
+          return res.status(403).json({
+            success: false,
+            ...(errorResponse as any),
+          });
+        }
+        return res.status(403).json({
+          success: false,
+          message: error.message || 'Forbidden',
+          statusCode: 403,
+        });
+      }
+      return res.status(error.status || 500).json({
+        success: false,
+        message: error.message || "Internal server error",
+        statusCode: error.status || 500,
+      });
+    }
   }
 }
