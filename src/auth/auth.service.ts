@@ -358,8 +358,8 @@ export class AuthService {
     // Hash the OTP
     const hashedOtp = await argon.hash(otp);
     
-    // Set OTP expiration (10 minutes from now)
-    const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    // Set OTP expiration (1 hour from now - max allowed)
+    const otpExpiresAt = new Date(Date.now() + 60 * 60 * 1000);
 
     // Create new OTP record
     await this.prisma.otp.create({
@@ -432,7 +432,7 @@ export class AuthService {
     };
   }
 
-  async resetPassword(dto: ResetPasswordDto): Promise<{ message: string }> {
+  async resetPassword(dto: ResetPasswordDto): Promise<{ message: string; mfaEnabled?: boolean }> {
     // Find user by email
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email },
@@ -521,6 +521,9 @@ export class AuthService {
       },
     });
 
+    // Revoke all user sessions (logout from all devices)
+    await this.sessionService.revokeAllUserSessions(user.id);
+
     // Send confirmation email
     try {
       await this.emailService.sendPasswordResetConfirmation(dto.email);
@@ -529,7 +532,11 @@ export class AuthService {
       console.error('Failed to send confirmation email:', error);
     }
 
-    return { message: 'Password reset successfully' };
+    // Check if MFA is enabled - user will need to verify MFA on next login
+    return { 
+      message: 'Password reset successfully. Please log in again.',
+      mfaEnabled: user.mfaEnabled,
+    };
   }
 
   // Session Management Methods
@@ -738,10 +745,30 @@ export class AuthService {
       throw new BadRequestException('New password and confirm password do not match');
     }
 
+    // Validate new password
+    const passwordValidation = PasswordValidator.validate(dto.newPassword);
+    if (!passwordValidation.isValid) {
+      throw new BadRequestException(passwordValidation.errors.join('; '));
+    }
+
     // Check if new password is different from current password
     const isSamePassword = await argon.verify(user.password, dto.newPassword);
     if (isSamePassword) {
       throw new BadRequestException('New password must be different from current password');
+    }
+
+    // Check password history - prevent reusing last 5 passwords
+    const recentPasswords = await this.prisma.passwordHistory.findMany({
+      where: { userId: user.id },
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+    });
+
+    for (const oldPassword of recentPasswords) {
+      const matches = await argon.verify(oldPassword.password, dto.newPassword);
+      if (matches) {
+        throw new BadRequestException('You cannot reuse any of your last 5 passwords');
+      }
     }
 
     // Hash new password
@@ -753,12 +780,41 @@ export class AuthService {
       data: {
         password: hashedPassword,
         refreshToken: null, // Invalidate all refresh tokens
+        passwordChangedAt: new Date(),
       },
     });
 
+    // Store password in history
+    await this.prisma.passwordHistory.create({
+      data: {
+        userId: user.id,
+        password: hashedPassword,
+      },
+    });
+
+    // Keep only last 5 passwords in history
+    const allPasswords = await this.prisma.passwordHistory.findMany({
+      where: { userId: user.id },
+      orderBy: { createdAt: 'desc' },
+      skip: 5,
+    });
+
+    if (allPasswords.length > 0) {
+      await this.prisma.passwordHistory.deleteMany({
+        where: {
+          id: { in: allPasswords.map(p => p.id) },
+        },
+      });
+    }
+
+    // Revoke all user sessions (logout from all devices)
+    await this.sessionService.revokeAllUserSessions(user.id);
+
     return {
       success: true,
-      message: 'Password changed successfully',
+      message: 'Password changed successfully. Please log in again with your new password.',
+      requiresReauth: true,
+      requiresMfa: user.mfaEnabled,
     };
   }
 
