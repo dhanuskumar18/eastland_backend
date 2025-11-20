@@ -229,22 +229,24 @@ model ContactSubmission {
 }
 
 model User {
-  id           Int       @id @default(autoincrement())
-  email        String    @unique
-  password     String
-  name         String?
-  roleId       Int
-  status       UserStatus @default(ACTIVE)
-  refreshToken String?
-  mfaEnabled   Boolean   @default(false)
-  mfaSecret    String?
+  id                Int       @id @default(autoincrement())
+  email             String    @unique
+  password          String
+  name              String?
+  roleId            Int
+  status            UserStatus @default(ACTIVE)
+  refreshToken      String?
+  mfaEnabled        Boolean   @default(false)
+  mfaSecret         String?
   passwordChangedAt DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  otps         Otp[]
-  sessions     Session[]
-  passwordHistory PasswordHistory[]
-  role         Role      @relation(fields: [roleId], references: [id])
+  failedLoginAttempts Int    @default(0)
+  lockedUntil       DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  otps              Otp[]
+  sessions          Session[]
+  passwordHistory   PasswordHistory[]
+  role              Role      @relation(fields: [roleId], references: [id])
 }
 
 model Otp {

@@ -15,6 +15,9 @@ export class CsrfMiddleware implements NestMiddleware {
     }
 
     // Skip CSRF for certain paths (like getting CSRF tokens and login endpoints)
+    // Normalize path to handle query parameters and trailing slashes
+    const normalizedPath = req.path.split('?')[0].toLowerCase();
+    
     const skipPaths = [
       '/auth/csrf-token',
       '/auth/csrf-token/authenticated',
@@ -28,7 +31,16 @@ export class CsrfMiddleware implements NestMiddleware {
       '/auth/reset-password',
     ];
 
-    if (skipPaths.some(path => req.path.startsWith(path))) {
+    // Check if path matches any skip path (case-insensitive, handles trailing slashes)
+    const shouldSkip = skipPaths.some(path => {
+      const normalizedSkipPath = path.toLowerCase();
+      return normalizedPath === normalizedSkipPath || 
+             normalizedPath.startsWith(normalizedSkipPath + '/') ||
+             normalizedPath.startsWith(normalizedSkipPath);
+    });
+
+    if (shouldSkip) {
+      this.logger.debug(`Skipping CSRF check for ${req.method} ${req.path}`);
       return next();
     }
 

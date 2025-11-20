@@ -66,6 +66,16 @@ import { ContactSubmissionsModule } from './contact-submissions/contact-submissi
         ttl: 60000, // 1 minute
         limit: 100, // 100 requests per minute
       },
+      {
+        name: 'password-reset',
+        ttl: 300000, // 5 minutes
+        limit: 10, // 10 attempts per 5 minutes for password reset flow
+      },
+      {
+        name: 'login',
+        ttl: 60000, // 1 minute
+        limit: 6, // 6 attempts per minute (allows 5 failed + 1 to show lockout message)
+      },
     ]),
   ],
   providers: [

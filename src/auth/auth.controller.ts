@@ -38,7 +38,7 @@ export class AuthController {
     private mfaService: MfaService
   ) {}
 
-  @Throttle({ short: { limit: 5, ttl: 60000 } }) // 5 attempts per minute for login
+  @Throttle({ login: { limit: 6, ttl: 60000 } }) // 6 attempts per minute (allows 5 failed + 1 to show lockout message)
   @Post("login")
   async signin(
     @Body() dto: AuthDto,
@@ -166,19 +166,22 @@ export class AuthController {
     }
   }
 
-  @Throttle({ short: { limit: 3, ttl: 300000 } }) // 3 attempts per 5 minutes for forgot password
+  @SkipCsrf() // Skip CSRF for forgot password (user not authenticated)
+  @Throttle({ 'password-reset': { limit: 5, ttl: 300000 } }) // 5 attempts per 5 minutes for forgot password
   @Post("forgot-password")
   forgotPassword(@Body() dto: ForgotPasswordDto) {
     return this.authService.forgotPassword(dto);
   }
 
-  @Throttle({ short: { limit: 5, ttl: 300000 } }) // 5 attempts per 5 minutes for OTP verification
+  @SkipCsrf() // Skip CSRF for OTP verification (user not authenticated)
+  @Throttle({ 'password-reset': { limit: 10, ttl: 300000 } }) // 10 attempts per 5 minutes for OTP verification
   @Post("verify-otp")
   verifyOtp(@Body() dto: VerifyOtpDto) {
     return this.authService.verifyOtp(dto);
   }
 
-  @Throttle({ short: { limit: 3, ttl: 300000 } }) // 3 attempts per 5 minutes for password reset
+  @SkipCsrf() // Skip CSRF for password reset (user not authenticated)
+  @Throttle({ 'password-reset': { limit: 10, ttl: 300000 } }) // 10 attempts per 5 minutes for password reset
   @Post("reset-password")
   resetPassword(@Body() dto: ResetPasswordDto) {
     return this.authService.resetPassword(dto);

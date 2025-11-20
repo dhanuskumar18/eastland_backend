@@ -33,12 +33,32 @@ export class AuthService {
         role: true,
       },
     });
+    
     if (!user) {
+      // Don't reveal if user exists for security
       throw new ForbiddenException('Credentials incorrect');
     }
-    const pwMatches = await argon.verify(user.password, dto.password);
-    if (!pwMatches) {
-      throw new ForbiddenException('Credentials incorrect');
+
+    // Check if account is locked
+    if (user.lockedUntil && user.lockedUntil > new Date()) {
+      const minutesRemaining = Math.ceil((user.lockedUntil.getTime() - Date.now()) / (1000 * 60));
+      throw new ForbiddenException({
+        message: `Account is locked due to too many failed login attempts. Please try again in ${minutesRemaining} minute(s).`,
+        code: 'ACCOUNT_LOCKED',
+        lockedUntil: user.lockedUntil,
+        minutesRemaining,
+      });
+    }
+
+    // If lock period has expired, reset the lock
+    if (user.lockedUntil && user.lockedUntil <= new Date()) {
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          failedLoginAttempts: 0,
+          lockedUntil: null,
+        },
+      });
     }
 
     // Check if user status is ACTIVE
@@ -47,6 +67,62 @@ export class AuthService {
         message: 'Your account is inactive. Please contact administrator.',
         code: 'ACCOUNT_INACTIVE',
         status: 'INACTIVE',
+      });
+    }
+
+    // Verify password
+    const pwMatches = await argon.verify(user.password, dto.password);
+    
+    if (!pwMatches) {
+      // Increment failed login attempts
+      const newFailedAttempts = (user.failedLoginAttempts || 0) + 1;
+      const MAX_FAILED_ATTEMPTS = 5;
+      const LOCKOUT_DURATION_MINUTES = 30; // Lock for 30 minutes
+
+      let updateData: any = {
+        failedLoginAttempts: newFailedAttempts,
+      };
+
+      // Lock account if max attempts reached
+      if (newFailedAttempts >= MAX_FAILED_ATTEMPTS) {
+        const lockedUntil = new Date(Date.now() + LOCKOUT_DURATION_MINUTES * 60 * 1000);
+        updateData.lockedUntil = lockedUntil;
+        
+        await this.prisma.user.update({
+          where: { id: user.id },
+          data: updateData,
+        });
+
+        throw new ForbiddenException({
+          message: `Account has been locked due to ${MAX_FAILED_ATTEMPTS} failed login attempts. Please try again in ${LOCKOUT_DURATION_MINUTES} minutes.`,
+          code: 'ACCOUNT_LOCKED',
+          lockedUntil,
+          attemptsRemaining: 0,
+        });
+      }
+
+      // Update failed attempts
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: updateData,
+      });
+
+      const attemptsRemaining = MAX_FAILED_ATTEMPTS - newFailedAttempts;
+      throw new ForbiddenException({
+        message: `Credentials incorrect. ${attemptsRemaining} attempt(s) remaining before account lockout.`,
+        code: 'INVALID_CREDENTIALS',
+        attemptsRemaining,
+      });
+    }
+
+    // Password is correct - reset failed attempts and lock status
+    if (user.failedLoginAttempts > 0 || user.lockedUntil) {
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          failedLoginAttempts: 0,
+          lockedUntil: null,
+        },
       });
     }
 

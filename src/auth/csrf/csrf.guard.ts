@@ -132,6 +132,30 @@ export class DoubleSubmitCsrfGuard implements CanActivate {
       return true;
     }
 
+    // Skip CSRF for unauthenticated auth endpoints (users don't have cookies yet)
+    const normalizedPath = request.path.split('?')[0].toLowerCase();
+    const unauthenticatedAuthPaths = [
+      '/auth/login',
+      '/auth/signup',
+      '/auth/forgot-password',
+      '/auth/verify-otp',
+      '/auth/reset-password',
+      '/auth/login/verify-mfa',
+      '/auth/csrf-token',
+      '/auth/csrf-token/double-submit',
+      '/auth/csrf-token/validate',
+    ];
+
+    const isUnauthenticatedPath = unauthenticatedAuthPaths.some(path => {
+      const normalizedSkipPath = path.toLowerCase();
+      return normalizedPath === normalizedSkipPath || 
+             normalizedPath.startsWith(normalizedSkipPath + '/');
+    });
+
+    if (isUnauthenticatedPath) {
+      return true;
+    }
+
     // Extract CSRF token from header
     const csrfToken = request.headers['x-csrf-token'] as string;
     if (!csrfToken) {
