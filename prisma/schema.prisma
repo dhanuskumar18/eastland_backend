@@ -238,10 +238,12 @@ model User {
   refreshToken String?
   mfaEnabled   Boolean   @default(false)
   mfaSecret    String?
+  passwordChangedAt DateTime?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   otps         Otp[]
   sessions     Session[]
+  passwordHistory PasswordHistory[]
   role         Role      @relation(fields: [roleId], references: [id])
 }
 
@@ -373,6 +375,17 @@ enum OtpType {
 enum TagType {
   VIDEO
   PRODUCT
+}
+
+model PasswordHistory {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  password  String   // Hashed password
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
 }
 
 enum UserStatus {

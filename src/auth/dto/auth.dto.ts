@@ -8,8 +8,8 @@ export class AuthDto {
 
     @IsString()
     @IsNotEmpty()
-    @MinLength(8)
-    @MaxLength(32)
+    @MinLength(12, { message: 'Password must be at least 12 characters long' })
+    @MaxLength(128, { message: 'Password must not exceed 128 characters' })
     password: string;
 }
 
@@ -63,7 +63,7 @@ export class ResetPasswordDto {
 
     @IsString()
     @IsNotEmpty()
-    @MinLength(8)
-    @MaxLength(32)
+    @MinLength(12, { message: 'Password must be at least 12 characters long' })
+    @MaxLength(128, { message: 'Password must not exceed 128 characters' })
     newPassword: string;
 }

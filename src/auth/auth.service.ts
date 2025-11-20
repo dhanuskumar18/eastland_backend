@@ -9,6 +9,7 @@ import { EmailService } from '../email/email.service';
 import { SessionService } from '../session/session.service';
 import { DeviceDetectionService } from '../session/device-detection.service';
 import { MfaService } from './mfa.service';
+import { PasswordValidator } from './utils/password-validator';
 import type { Response, Request } from 'express';
 import * as crypto from 'crypto';
 
@@ -122,6 +123,12 @@ export class AuthService {
 
   async signup(dto: SignupDto, res: Response, req: Request) {
     try {
+      // Validate password
+      const passwordValidation = PasswordValidator.validate(dto.password);
+      if (!passwordValidation.isValid) {
+        throw new BadRequestException(passwordValidation.errors.join('; '));
+      }
+
       const hash = await argon.hash(dto.password);
       
       // Determine the role - default to 'USER' if not provided
@@ -143,13 +150,36 @@ export class AuthService {
           email: dto.email,
           password: hash,
           roleId: role.id,
+          passwordChangedAt: new Date(),
         },
         include: {
           role: true,
         },
       });
-      return this.signTokenWithCookie(user, res, req);
+
+      // Store password in history
+      await this.prisma.passwordHistory.create({
+        data: {
+          userId: user.id,
+          password: hash,
+        },
+      });
+      
+      return this.signTokenWithCookie(
+        {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          status: user.status,
+          role: user.role,
+        },
+        res,
+        req
+      );
     } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
       if (error instanceof PrismaClientKnownRequestError) {
         if (error.code === 'P2002') {
           throw new ForbiddenException('Credentials taken');
@@ -351,6 +381,26 @@ export class AuthService {
       throw new BadRequestException('No valid verified OTP found. Please verify your OTP first.');
     }
 
+    // Validate new password
+    const passwordValidation = PasswordValidator.validate(dto.newPassword);
+    if (!passwordValidation.isValid) {
+      throw new BadRequestException(passwordValidation.errors.join('; '));
+    }
+
+    // Check password history - prevent reusing last 5 passwords
+    const recentPasswords = await this.prisma.passwordHistory.findMany({
+      where: { userId: user.id },
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+    });
+
+    for (const oldPassword of recentPasswords) {
+      const matches = await argon.verify(oldPassword.password, dto.newPassword);
+      if (matches) {
+        throw new BadRequestException('You cannot reuse any of your last 5 passwords');
+      }
+    }
+
     // Hash new password
     const hashedPassword = await argon.hash(dto.newPassword);
 
@@ -360,8 +410,32 @@ export class AuthService {
       data: {
         password: hashedPassword,
         refreshToken: null, // Invalidate all refresh tokens
+        passwordChangedAt: new Date(),
       },
     });
+
+    // Store password in history
+    await this.prisma.passwordHistory.create({
+      data: {
+        userId: user.id,
+        password: hashedPassword,
+      },
+    });
+
+    // Keep only last 5 passwords in history
+    const allPasswords = await this.prisma.passwordHistory.findMany({
+      where: { userId: user.id },
+      orderBy: { createdAt: 'desc' },
+      skip: 5,
+    });
+
+    if (allPasswords.length > 0) {
+      await this.prisma.passwordHistory.deleteMany({
+        where: {
+          id: { in: allPasswords.map(p => p.id) },
+        },
+      });
+    }
 
     // Clean up all OTPs for this user (used and unused)
     await this.prisma.otp.deleteMany({
