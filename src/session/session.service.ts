@@ -76,6 +76,7 @@ export class SessionService {
 
   /**
    * Validate and refresh a session
+   * Implements idle timeout: Sessions are invalidated after 30 minutes of inactivity
    */
   async validateSession(tokenId: string, req: Request): Promise<SessionData | null> {
     const session = await this.prisma.session.findUnique({
@@ -83,6 +84,28 @@ export class SessionService {
     });
 
     if (!session || session.expiresAt < new Date()) {
+      return null;
+    }
+
+    // Check idle timeout (30 minutes max inactivity)
+    const IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+    const now = new Date();
+    const timeSinceLastUsed = now.getTime() - session.lastUsed.getTime();
+
+    if (timeSinceLastUsed > IDLE_TIMEOUT_MS) {
+      // Session has been idle for more than 30 minutes, invalidate it
+      await this.prisma.session.update({
+        where: { id: session.id },
+        data: { isActive: false },
+      });
+      
+      await this.logSessionActivity(session.id, 'IDLE_TIMEOUT', req, {
+        reason: 'Session idle timeout exceeded',
+        idleDuration: timeSinceLastUsed,
+        maxIdleTimeout: IDLE_TIMEOUT_MS,
+      });
+      
+      this.logger.log(`Session ${session.id} invalidated due to idle timeout`);
       return null;
     }
 
@@ -316,6 +339,9 @@ export class SessionService {
 
   /**
    * Generate a unique token ID
+   * Uses crypto.randomUUID() which provides 122 bits of entropy (well above the 64-bit minimum requirement)
+   * Algorithm: Cryptographically secure random number generator (CSPRNG) via Node.js crypto module
+   * This uses the system's secure random number generator, typically /dev/urandom on Unix systems
    */
   generateTokenId(): string {
     return crypto.randomUUID();

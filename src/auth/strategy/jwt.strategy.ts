@@ -14,6 +14,8 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
         private sessionService: SessionService,
     ) {
         super({
+            // Security: Session tokens are NEVER extracted from URL parameters
+            // Only from Authorization header to prevent leakage via logs, referers, and browser history
             jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
             secretOrKey: config.get('JWT_SECRET'),
             passReqToCallback: true, // Enable request access
@@ -21,6 +23,12 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     }
 
     async validate(req: Request, payload: { sub: number; email: string; jti?: string }) {
+        // Security: Explicitly reject tokens from URL parameters
+        // This prevents token leakage via logs, referers, and browser history
+        if (req.query?.token || req.query?.access_token || req.query?.jwt) {
+            throw new UnauthorizedException('Session tokens must not be passed in URL parameters');
+        }
+
         const user = await this.prisma.user.findUnique({
             where: { id: payload.sub },
             include: { role: true },

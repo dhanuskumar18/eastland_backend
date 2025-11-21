@@ -465,11 +465,15 @@ export class AuthController {
   }
 
   @UseGuards(JwtGuard)
+  @Throttle({ short: { limit: 5, ttl: 60000 } }) // 5 attempts per minute for password change
   @Post("change-password")
   async changePassword(
     @GetUser("id") userId: number,
     @Body() dto: ChangePasswordDto
   ) {
+    // Security: Full re-authentication required (current password verification)
+    // Rate limited to prevent brute force attacks
+    // If rate limit exceeded, user must wait before retrying
     return this.authService.changePassword(userId, dto);
   }
 

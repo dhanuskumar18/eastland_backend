@@ -168,11 +168,14 @@ export class AuthService {
     }
 
     // MFA not enabled, proceed with normal login
+    // Security: New session token generated upon each successful authentication (session fixation prevention)
     return this.signTokenWithCookie(user, res, req);
    }
 
     async signTokenWithCookie(user: { id: number; email: string; name: string | null; status: string; role: { name: string } }, res: Response, req?: Request, existingTokenId?: string): Promise<TokenResponseDto> {
       // Use existing tokenId if provided (for token refresh), otherwise generate new one (for new login)
+      // Session fixation prevention: New session token generated upon each successful authentication
+      // Uses crypto.randomUUID() which provides 122 bits of entropy (well above 64-bit minimum)
       const tokenId = existingTokenId || crypto.randomUUID();
       const payload = {
         sub: user.id,
@@ -181,12 +184,15 @@ export class AuthService {
       };
       
       // Generate access token (short-lived)
+      // JWT tokens are signed using HS256 algorithm (HMAC-SHA256) by default
+      // This provides strong tamper-resistance through digital signatures
       const accessToken = await this.jwt.signAsync(payload, {
         expiresIn: '15m',
         secret: this.config.get('JWT_SECRET'),
       });
 
       // Generate refresh token (long-lived)
+      // Same signing algorithm (HS256) with separate secret for additional security
       const refreshToken = await this.jwt.signAsync(payload, {
         expiresIn: '7d',
         secret: this.config.get('JWT_REFRESH_SECRET'),
@@ -240,6 +246,11 @@ export class AuthService {
       });
 
       // Set refresh token in HTTP-only cookie
+      // Cookie security attributes:
+      // - httpOnly: true - Prevents JavaScript access (XSS protection)
+      // - secure: true in production - Ensures HTTPS-only transmission
+      // - sameSite: 'strict' - CSRF prevention (strict mode)
+      // Session tokens are NEVER exposed in URL parameters (only in cookies)
       res.cookie('refreshToken', refreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
@@ -660,13 +671,18 @@ export class AuthService {
 
   /**
    * Update logout method to handle session management
+   * Security: Server-side session identifiers are properly invalidated on logout
+   * - Revokes session in database (sets isActive = false)
+   * - Removes refresh token from database
+   * - Clears cookies (refreshToken, csrf-token)
+   * - Users can explicitly terminate their active session through logout
    */
   async logout(userId: number, res: Response, sessionId?: string): Promise<{ message: string }> {
     if (sessionId) {
-      // Revoke specific session
+      // Revoke specific session - server-side session identifier properly invalidated
       await this.sessionService.revokeSession(sessionId, userId);
     } else {
-      // Revoke all sessions
+      // Revoke all sessions - server-side session identifiers properly invalidated
       await this.sessionService.revokeAllUserSessions(userId);
     }
 
@@ -825,6 +841,10 @@ export class AuthService {
 
   /**
    * Change password
+   * Security: Full user re-authentication required for sensitive operations
+   * - Requires current password verification (re-authentication)
+   * - Rate limited to prevent brute force attacks
+   * - If rate limit exceeded, user must wait before retrying (enforced by ThrottlerGuard)
    */
   async changePassword(userId: number, dto: ChangePasswordDto) {
     const user = await this.prisma.user.findUnique({
@@ -835,7 +855,8 @@ export class AuthService {
       throw new NotFoundException('User not found');
     }
 
-    // Verify current password
+    // Full re-authentication: Verify current password before allowing password change
+    // This ensures that even if a session is compromised, sensitive operations require re-authentication
     const pwMatches = await argon.verify(user.password, dto.currentPassword);
     if (!pwMatches) {
       throw new ForbiddenException('Current password is incorrect');

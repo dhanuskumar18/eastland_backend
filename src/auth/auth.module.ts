@@ -19,7 +19,12 @@ import { DatabaseModule } from "../database/database.module";
             imports: [ConfigModule],
             useFactory: async (config: ConfigService) => ({
                 secret: config.get('JWT_SECRET'),
-                signOptions: { expiresIn: '15m' },
+                signOptions: { 
+                    expiresIn: '15m',
+                    // Algorithm: HS256 (HMAC-SHA256) - Strong cryptographic algorithm for JWT signing
+                    // This provides tamper-resistance through digital signatures
+                    algorithm: 'HS256',
+                },
             }),
             inject: [ConfigService],
         }),
