@@ -14,6 +14,8 @@ export class UploadService {
     this.region = this.configService.get<string>('AWS_REGION') || 'us-east-1';
     this.bucketName = this.configService.get<string>('AWS_S3_BUCKET_NAME') || 'eastland-s3';
 
+    // Security: AWS credentials stored in environment variables (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)
+    // Never hardcoded in source code - ensures secrets are not committed to version control
     this.s3Client = new S3Client({
       region: this.region,
       credentials: {

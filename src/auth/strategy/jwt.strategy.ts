@@ -17,6 +17,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
             // Security: Session tokens are NEVER extracted from URL parameters
             // Only from Authorization header to prevent leakage via logs, referers, and browser history
             jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+            // Security: JWT secret stored in environment variable (JWT_SECRET), never hardcoded
             secretOrKey: config.get('JWT_SECRET'),
             passReqToCallback: true, // Enable request access
         });

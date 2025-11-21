@@ -157,6 +157,7 @@ export class CsrfService {
     cookieValue: string;
   }> {
     const token = await this.generateToken(sessionId, userId);
+    // Security: JWT secret stored in environment variable (JWT_SECRET), never hardcoded
     const secret = this.config.get('JWT_SECRET');
     if (!secret) {
       throw new Error('JWT_SECRET is not configured');
@@ -184,6 +185,7 @@ export class CsrfService {
     }
 
     // Then validate the cookie value matches the token
+    // Security: JWT secret stored in environment variable (JWT_SECRET), never hardcoded
     const secret = this.config.get('JWT_SECRET');
     if (!secret) {
       return false;

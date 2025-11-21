@@ -198,6 +198,7 @@ export class AuthService {
       };
       
       // Generate access token (short-lived)
+      // Security: JWT secret stored in environment variable (JWT_SECRET), never hardcoded
       // JWT tokens are signed using HS256 algorithm (HMAC-SHA256) by default
       // This provides strong tamper-resistance through digital signatures
       const accessToken = await this.jwt.signAsync(payload, {
@@ -206,6 +207,7 @@ export class AuthService {
       });
 
       // Generate refresh token (long-lived)
+      // Security: Refresh token secret stored in environment variable (JWT_REFRESH_SECRET), never hardcoded
       // Same signing algorithm (HS256) with separate secret for additional security
       const refreshToken = await this.jwt.signAsync(payload, {
         expiresIn: '7d',
@@ -360,6 +362,7 @@ export class AuthService {
   async refreshToken(refreshToken: string, res: Response, req?: Request): Promise<TokenResponseDto> {
     try {
       // Verify the refresh token
+      // Security: Refresh token secret stored in environment variable (JWT_REFRESH_SECRET), never hardcoded
       const payload = await this.jwt.verifyAsync(refreshToken, {
         secret: this.config.get('JWT_REFRESH_SECRET'),
       });

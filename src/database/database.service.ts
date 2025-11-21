@@ -9,6 +9,8 @@ export class DatabaseService extends PrismaClient implements OnModuleInit, OnMod
         super({
             datasources:{
                 db:{
+                    // Security: Database URL stored in environment variable (DATABASE_URL)
+                    // Never hardcoded in source code - ensures credentials are not committed to version control
                     // url:process.env.DATABASE_URL
                     url:config.get('DATABASE_URL')
                 }

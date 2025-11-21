@@ -14,6 +14,8 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
             host: config.get('MAIL_HOST', 'smtp.gmail.com'),
             port: parseInt(config.get('MAIL_PORT', '587')),
             secure: false, // true for 465, false for other ports
+            // Security: Email credentials stored in environment variables (MAIL_USER, MAIL_PASS)
+            // Never hardcoded in source code - ensures secrets are not committed to version control
             auth: {
               user: config.get('MAIL_USER'),
               pass: config.get('MAIL_PASS'),

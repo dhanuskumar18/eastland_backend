@@ -18,6 +18,8 @@ import { DatabaseModule } from "../database/database.module";
         JwtModule.registerAsync({
             imports: [ConfigModule],
             useFactory: async (config: ConfigService) => ({
+                // Security: JWT secret stored in environment variable (JWT_SECRET), never hardcoded
+                // This ensures secrets are not committed to version control and can be rotated easily
                 secret: config.get('JWT_SECRET'),
                 signOptions: { 
                     expiresIn: '15m',
