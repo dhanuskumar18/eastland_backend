@@ -66,15 +66,22 @@ async function bootstrap() {
     dotfiles: 'deny', // Deny access to dotfiles (hidden files like .env, .git, etc.)
   });
 
+  // VALIDATION CHECKLIST ITEM #1 & #2: Input Validation & Allow Lists
+  // ValidationPipe with whitelist ensures only expected properties are accepted
+  // Security: Prevents injection of unexpected fields and validates all inputs
+  // - whitelist: true - Strips non-whitelisted properties
+  // - forbidNonWhitelisted: true - Rejects requests with unexpected properties
+  // - transform: true - Transforms payloads to DTO instances
+  // - stopAtFirstError: false - Returns all validation errors at once
   app.useGlobalPipes(new ValidationPipe(
     {
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
+      whitelist: true, // VALIDATION CHECKLIST ITEM #2: Allow lists - only expected properties allowed
+      forbidNonWhitelisted: true, // Reject requests with unexpected properties
+      transform: true, // Transform payloads to DTO instances for type safety
       transformOptions: {
-        enableImplicitConversion: true,
+        enableImplicitConversion: true, // Convert string numbers to numbers, etc.
       },
-      stopAtFirstError: false,
+      stopAtFirstError: false, // Return all validation errors for better UX
     }
   ));
   const port = process.env.PORT || 5003;
