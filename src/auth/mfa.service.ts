@@ -1,5 +1,6 @@
 import { Injectable, BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from 'src/database/database.service';
+import { EmailService } from '../email/email.service';
 import * as speakeasy from 'speakeasy';
 import * as QRCode from 'qrcode';
 import * as argon from '@node-rs/argon2';
@@ -10,6 +11,7 @@ export class MfaService {
   constructor(
     private prisma: DatabaseService,
     private config: ConfigService,
+    private emailService: EmailService,
   ) {}
 
   /**
@@ -92,6 +94,13 @@ export class MfaService {
       where: { id: userId },
       data: { mfaEnabled: true },
     });
+    // Send MFA enabled notification
+    try {
+      await this.emailService.sendMfaEnabledNotification(user.email);
+    } catch (error) {
+      // Don't fail MFA enable if email fails
+      console.error('Failed to send MFA enabled notification:', error);
+    }
 
     return { message: 'MFA enabled successfully' };
   }
@@ -122,6 +131,14 @@ export class MfaService {
         mfaSecret: null,
       },
     });
+
+    // Send MFA disabled notification
+    try {
+      await this.emailService.sendMfaDisabledNotification(user.email);
+    } catch (error) {
+      // Don't fail MFA disable if email fails
+      console.error('Failed to send MFA disabled notification:', error);
+    }
 
     return { message: 'MFA disabled successfully' };
   }

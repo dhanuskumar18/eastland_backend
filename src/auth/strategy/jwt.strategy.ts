@@ -42,6 +42,25 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
             });
         }
 
+        // Check if password has expired (90 days) - only if passwordChangedAt is set
+        // If passwordChangedAt is null, allow access (user should change password)
+        if (user.passwordChangedAt) {
+            const now = new Date();
+            const daysSinceChange = Math.floor((now.getTime() - user.passwordChangedAt.getTime()) / (1000 * 60 * 60 * 24));
+            const PASSWORD_EXPIRY_DAYS = 90;
+            
+            if (daysSinceChange >= PASSWORD_EXPIRY_DAYS) {
+                throw new UnauthorizedException({
+                    success: false,
+                    message: 'Your password has expired. Please change your password to continue.',
+                    code: 'PASSWORD_EXPIRED',
+                    daysExpired: daysSinceChange - PASSWORD_EXPIRY_DAYS,
+                });
+            }
+        }
+        // If passwordChangedAt is null, allow access but user should change password
+        // This handles existing users who haven't changed password yet
+
         // If JWT has a token ID, validate the session
         if (payload.jti) {
             const session = await this.sessionService.validateSession(payload.jti, req);

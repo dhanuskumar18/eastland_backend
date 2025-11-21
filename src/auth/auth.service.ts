@@ -126,6 +126,35 @@ export class AuthService {
       });
     }
 
+    // Check password expiry (90 days) - only if passwordChangedAt is set
+    // If passwordChangedAt is null, set it to current date (for existing users) and allow login
+    if (!user.passwordChangedAt) {
+      // Set passwordChangedAt for existing users who haven't changed password yet
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { passwordChangedAt: new Date() },
+      });
+      // Update user object for subsequent checks
+      user.passwordChangedAt = new Date();
+    }
+
+    const passwordExpiry = this.checkPasswordExpiry(user.passwordChangedAt);
+    if (passwordExpiry.expired) {
+      throw new ForbiddenException({
+        message: 'Your password has expired. Please change your password to continue.',
+        code: 'PASSWORD_EXPIRED',
+        daysExpired: passwordExpiry.daysSinceChange - 90,
+      });
+    } else if (passwordExpiry.daysRemaining <= 7 && passwordExpiry.daysRemaining > 0) {
+      // Send warning email if password expires in 7 days or less
+      try {
+        await this.emailService.sendPasswordExpiryWarning(user.email, passwordExpiry.daysRemaining);
+      } catch (error) {
+        // Don't fail login if email fails
+        console.error('Failed to send password expiry warning:', error);
+      }
+    }
+
     // Check if MFA is enabled for this user
     if (user.mfaEnabled) {
       // Return response indicating MFA verification is required
@@ -162,7 +191,29 @@ export class AuthService {
 
       // Create session if request is available
       if (req) {
-        await this.sessionService.createSession(user.id, tokenId, req);
+        const sessionData = await this.sessionService.createSession(user.id, tokenId, req);
+        
+        // Check if this is a new device/login and send notification
+        try {
+          const allSessions = await this.sessionService.getUserSessions(user.id);
+          // If this is the only session, send new device notification
+          // Or if device/browser/IP is different from previous sessions
+          if (allSessions.length === 1 || this.isNewDeviceLogin(sessionData, allSessions)) {
+            const deviceInfo = sessionData.deviceInfo || {};
+            await this.emailService.sendNewDeviceLoginNotification(
+              user.email,
+              {
+                browser: (deviceInfo as any)?.browser,
+                os: (deviceInfo as any)?.os,
+                device: (deviceInfo as any)?.device,
+                ipAddress: sessionData.ipAddress,
+              }
+            );
+          }
+        } catch (error) {
+          // Don't fail login if notification fails
+          console.error('Failed to send new device login notification:', error);
+        }
       }
 
       // Hash and store refresh token in database (for backward compatibility)
@@ -636,6 +687,7 @@ export class AuthService {
         email: true,
         name: true,
         status: true,
+        passwordChangedAt: true,
         createdAt: true,
         updatedAt: true,
         role: {
@@ -650,7 +702,17 @@ export class AuthService {
       throw new NotFoundException('User not found');
     }
 
-    return user;
+    // Check password expiry
+    const passwordExpiry = this.checkPasswordExpiry(user.passwordChangedAt);
+
+    return {
+      ...user,
+      passwordExpiry: {
+        expired: passwordExpiry.expired,
+        daysRemaining: passwordExpiry.daysRemaining,
+        daysSinceChange: passwordExpiry.daysSinceChange,
+      },
+    };
   }
 
   /**
@@ -689,6 +751,7 @@ export class AuthService {
     }
 
     try {
+      const oldEmail = user.email;
       const updated = await this.prisma.user.update({
         where: { id: userId },
         data: updateData,
@@ -706,6 +769,27 @@ export class AuthService {
           },
         },
       });
+
+      // Send email change notification if email was changed
+      if (updateData.email && updateData.email !== oldEmail) {
+        try {
+          const currentSession = await this.sessionService.getUserSessions(userId);
+          const deviceInfo = currentSession.length > 0 ? currentSession[0].deviceInfo : {};
+          await this.emailService.sendEmailChangeNotification(
+            oldEmail,
+            updateData.email,
+            {
+              browser: (deviceInfo as any)?.browser,
+              os: (deviceInfo as any)?.os,
+              device: (deviceInfo as any)?.device,
+              ipAddress: currentSession.length > 0 ? currentSession[0].ipAddress : undefined,
+            }
+          );
+        } catch (error) {
+          // Don't fail profile update if email fails
+          console.error('Failed to send email change notification:', error);
+        }
+      }
 
       return {
         success: true,
@@ -810,6 +894,24 @@ export class AuthService {
     // Revoke all user sessions (logout from all devices)
     await this.sessionService.revokeAllUserSessions(user.id);
 
+    // Send password change notification email
+    try {
+      const currentSession = await this.sessionService.getUserSessions(user.id);
+      const deviceInfo = currentSession.length > 0 ? currentSession[0].deviceInfo : {};
+      await this.emailService.sendPasswordChangeNotification(
+        user.email,
+        {
+          browser: (deviceInfo as any)?.browser,
+          os: (deviceInfo as any)?.os,
+          device: (deviceInfo as any)?.device,
+          ipAddress: currentSession.length > 0 ? currentSession[0].ipAddress : undefined,
+        }
+      );
+    } catch (error) {
+      // Don't fail password change if email fails
+      console.error('Failed to send password change notification:', error);
+    }
+
     return {
       success: true,
       message: 'Password changed successfully. Please log in again with your new password.',
@@ -854,5 +956,51 @@ export class AuthService {
 
     // MFA verified, complete login
     return this.signTokenWithCookie(user, res, req);
+  }
+
+  /**
+   * Check if password has expired (90 days)
+   */
+  checkPasswordExpiry(passwordChangedAt: Date | null): { expired: boolean; daysRemaining: number; daysSinceChange: number } {
+    if (!passwordChangedAt) {
+      // If password was never changed, don't consider it expired - allow login
+      // This handles existing users who haven't changed password yet
+      return { expired: false, daysRemaining: 90, daysSinceChange: 0 };
+    }
+
+    const now = new Date();
+    const daysSinceChange = Math.floor((now.getTime() - passwordChangedAt.getTime()) / (1000 * 60 * 60 * 24));
+    const PASSWORD_EXPIRY_DAYS = 90;
+    const daysRemaining = PASSWORD_EXPIRY_DAYS - daysSinceChange;
+    const expired = daysSinceChange >= PASSWORD_EXPIRY_DAYS;
+
+    return { expired, daysRemaining, daysSinceChange };
+  }
+
+  /**
+   * Check if login is from a new device
+   */
+  private isNewDeviceLogin(newSession: any, existingSessions: any[]): boolean {
+    if (existingSessions.length === 0) return true;
+    
+    const newDeviceInfo = newSession.deviceInfo || {};
+    const newBrowser = (newDeviceInfo as any)?.browser;
+    const newOs = (newDeviceInfo as any)?.os;
+    const newIp = newSession.ipAddress;
+
+    // Check if any existing session has the same device/browser/IP
+    for (const session of existingSessions) {
+      const existingDeviceInfo = session.deviceInfo || {};
+      const existingBrowser = (existingDeviceInfo as any)?.browser;
+      const existingOs = (existingDeviceInfo as any)?.os;
+      const existingIp = session.ipAddress;
+
+      // If browser, OS, and IP match, it's not a new device
+      if (newBrowser === existingBrowser && newOs === existingOs && newIp === existingIp) {
+        return false;
+      }
+    }
+
+    return true;
   }
 }

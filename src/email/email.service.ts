@@ -67,7 +67,7 @@ export class EmailService {
             
             <p><strong>Important:</strong></p>
             <ul>
-                <li>This OTP is valid for 10 minutes only</li>
+                <li>This OTP is valid for 1 hour only</li>
                 <li>Do not share this OTP with anyone</li>
                 <li>If you did not request this password reset, please ignore this email</li>
             </ul>
@@ -170,6 +170,580 @@ export class EmailService {
     } catch (error) {
       this.logger.error(`Failed to send confirmation email to ${email}:`, error);
       throw error;
+    }
+  }
+
+  async sendPasswordChangeNotification(email: string, deviceInfo?: { browser?: string; os?: string; device?: string; ipAddress?: string }): Promise<void> {
+    try {
+      this.logger.log(`Attempting to send password change notification to: ${email}`);
+      
+      const deviceDetails = deviceInfo 
+        ? `${deviceInfo.browser || 'Unknown'} on ${deviceInfo.os || 'Unknown OS'}${deviceInfo.device ? ` (${deviceInfo.device})` : ''}`
+        : 'your account';
+      const locationInfo = deviceInfo?.ipAddress ? ` from IP: ${deviceInfo.ipAddress}` : '';
+
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <title>Password Changed</title>
+            <style>
+                body {
+                    font-family: Arial, sans-serif;
+                    line-height: 1.6;
+                    color: #333;
+                    max-width: 600px;
+                    margin: 0 auto;
+                    padding: 20px;
+                }
+                .header {
+                    background-color: #ffc107;
+                    color: #333;
+                    padding: 20px;
+                    text-align: center;
+                    border-radius: 5px;
+                }
+                .info-box {
+                    background-color: #f8f9fa;
+                    border-left: 4px solid #ffc107;
+                    padding: 15px;
+                    margin: 20px 0;
+                }
+                .footer {
+                    margin-top: 30px;
+                    padding-top: 20px;
+                    border-top: 1px solid #eee;
+                    font-size: 12px;
+                    color: #666;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h1>Password Changed</h1>
+            </div>
+            
+            <p>Hello,</p>
+            
+            <p>Your password was successfully changed${locationInfo ? locationInfo : ''}.</p>
+            
+            <div class="info-box">
+                <p><strong>Change Details:</strong></p>
+                <ul>
+                    <li>Device: ${deviceDetails}</li>
+                    <li>Time: ${new Date().toLocaleString()}</li>
+                </ul>
+            </div>
+            
+            <p><strong>Important:</strong></p>
+            <ul>
+                <li>If you did not make this change, please contact support immediately</li>
+                <li>Your account has been logged out from all devices for security</li>
+                <li>You will need to log in again with your new password</li>
+            </ul>
+            
+            <div class="footer">
+                <p>This is an automated security notification. Please do not reply to this email.</p>
+            </div>
+        </body>
+        </html>
+      `;
+      
+      await this.mailerService.sendMail({
+        to: email,
+        subject: 'Password Changed - Security Notification',
+        html: htmlContent,
+      });
+      
+      this.logger.log(`Password change notification sent successfully to: ${email}`);
+    } catch (error) {
+      this.logger.error(`Failed to send password change notification to ${email}:`, error);
+      // Don't throw - email failure shouldn't block password change
+    }
+  }
+
+  async sendEmailChangeNotification(oldEmail: string, newEmail: string, deviceInfo?: { browser?: string; os?: string; device?: string; ipAddress?: string }): Promise<void> {
+    try {
+      this.logger.log(`Attempting to send email change notification to: ${oldEmail} and ${newEmail}`);
+      
+      const deviceDetails = deviceInfo 
+        ? `${deviceInfo.browser || 'Unknown'} on ${deviceInfo.os || 'Unknown OS'}${deviceInfo.device ? ` (${deviceInfo.device})` : ''}`
+        : 'your account';
+      const locationInfo = deviceInfo?.ipAddress ? ` from IP: ${deviceInfo.ipAddress}` : '';
+
+      // Send to old email
+      const oldEmailContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <title>Email Address Changed</title>
+            <style>
+                body {
+                    font-family: Arial, sans-serif;
+                    line-height: 1.6;
+                    color: #333;
+                    max-width: 600px;
+                    margin: 0 auto;
+                    padding: 20px;
+                }
+                .header {
+                    background-color: #ffc107;
+                    color: #333;
+                    padding: 20px;
+                    text-align: center;
+                    border-radius: 5px;
+                }
+                .info-box {
+                    background-color: #f8f9fa;
+                    border-left: 4px solid #ffc107;
+                    padding: 15px;
+                    margin: 20px 0;
+                }
+                .footer {
+                    margin-top: 30px;
+                    padding-top: 20px;
+                    border-top: 1px solid #eee;
+                    font-size: 12px;
+                    color: #666;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h1>Email Address Changed</h1>
+            </div>
+            
+            <p>Hello,</p>
+            
+            <p>Your account email address has been changed from <strong>${oldEmail}</strong> to <strong>${newEmail}</strong>${locationInfo ? locationInfo : ''}.</p>
+            
+            <div class="info-box">
+                <p><strong>Change Details:</strong></p>
+                <ul>
+                    <li>Old Email: ${oldEmail}</li>
+                    <li>New Email: ${newEmail}</li>
+                    <li>Device: ${deviceDetails}</li>
+                    <li>Time: ${new Date().toLocaleString()}</li>
+                </ul>
+            </div>
+            
+            <p><strong>Important:</strong></p>
+            <ul>
+                <li>If you did not make this change, please contact support immediately</li>
+                <li>Future notifications will be sent to your new email address</li>
+            </ul>
+            
+            <div class="footer">
+                <p>This is an automated security notification. Please do not reply to this email.</p>
+            </div>
+        </body>
+        </html>
+      `;
+
+      // Send to new email
+      const newEmailContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <title>Email Address Changed</title>
+            <style>
+                body {
+                    font-family: Arial, sans-serif;
+                    line-height: 1.6;
+                    color: #333;
+                    max-width: 600px;
+                    margin: 0 auto;
+                    padding: 20px;
+                }
+                .header {
+                    background-color: #28a745;
+                    color: white;
+                    padding: 20px;
+                    text-align: center;
+                    border-radius: 5px;
+                }
+                .info-box {
+                    background-color: #f8f9fa;
+                    border-left: 4px solid #28a745;
+                    padding: 15px;
+                    margin: 20px 0;
+                }
+                .footer {
+                    margin-top: 30px;
+                    padding-top: 20px;
+                    border-top: 1px solid #eee;
+                    font-size: 12px;
+                    color: #666;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h1>Email Address Changed</h1>
+            </div>
+            
+            <p>Hello,</p>
+            
+            <p>Your account email address has been successfully changed to <strong>${newEmail}</strong>${locationInfo ? locationInfo : ''}.</p>
+            
+            <div class="info-box">
+                <p><strong>Change Details:</strong></p>
+                <ul>
+                    <li>Previous Email: ${oldEmail}</li>
+                    <li>New Email: ${newEmail}</li>
+                    <li>Device: ${deviceDetails}</li>
+                    <li>Time: ${new Date().toLocaleString()}</li>
+                </ul>
+            </div>
+            
+            <p><strong>Important:</strong></p>
+            <ul>
+                <li>If you did not make this change, please contact support immediately</li>
+                <li>All future notifications will be sent to this email address</li>
+            </ul>
+            
+            <div class="footer">
+                <p>This is an automated security notification. Please do not reply to this email.</p>
+            </div>
+        </body>
+        </html>
+      `;
+      
+      // Send to both emails
+      await Promise.all([
+        this.mailerService.sendMail({
+          to: oldEmail,
+          subject: 'Email Address Changed - Security Notification',
+          html: oldEmailContent,
+        }),
+        this.mailerService.sendMail({
+          to: newEmail,
+          subject: 'Email Address Changed - Security Notification',
+          html: newEmailContent,
+        }),
+      ]);
+      
+      this.logger.log(`Email change notifications sent successfully to: ${oldEmail} and ${newEmail}`);
+    } catch (error) {
+      this.logger.error(`Failed to send email change notification:`, error);
+      // Don't throw - email failure shouldn't block email change
+    }
+  }
+
+  async sendNewDeviceLoginNotification(email: string, deviceInfo: { browser?: string; os?: string; device?: string; ipAddress?: string }): Promise<void> {
+    try {
+      this.logger.log(`Attempting to send new device login notification to: ${email}`);
+      
+      const deviceDetails = `${deviceInfo.browser || 'Unknown'} on ${deviceInfo.os || 'Unknown OS'}${deviceInfo.device ? ` (${deviceInfo.device})` : ''}`;
+      const locationInfo = deviceInfo.ipAddress || 'Unknown location';
+
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <title>New Device Login</title>
+            <style>
+                body {
+                    font-family: Arial, sans-serif;
+                    line-height: 1.6;
+                    color: #333;
+                    max-width: 600px;
+                    margin: 0 auto;
+                    padding: 20px;
+                }
+                .header {
+                    background-color: #17a2b8;
+                    color: white;
+                    padding: 20px;
+                    text-align: center;
+                    border-radius: 5px;
+                }
+                .info-box {
+                    background-color: #f8f9fa;
+                    border-left: 4px solid #17a2b8;
+                    padding: 15px;
+                    margin: 20px 0;
+                }
+                .footer {
+                    margin-top: 30px;
+                    padding-top: 20px;
+                    border-top: 1px solid #eee;
+                    font-size: 12px;
+                    color: #666;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h1>New Device Login Detected</h1>
+            </div>
+            
+            <p>Hello,</p>
+            
+            <p>We detected a login to your account from a new device or location.</p>
+            
+            <div class="info-box">
+                <p><strong>Login Details:</strong></p>
+                <ul>
+                    <li>Device: ${deviceDetails}</li>
+                    <li>Location: ${locationInfo}</li>
+                    <li>Time: ${new Date().toLocaleString()}</li>
+                </ul>
+            </div>
+            
+            <p><strong>Important:</strong></p>
+            <ul>
+                <li>If this was you, no action is needed</li>
+                <li>If you don't recognize this login, please change your password immediately</li>
+                <li>Consider enabling two-factor authentication for additional security</li>
+            </ul>
+            
+            <div class="footer">
+                <p>This is an automated security notification. Please do not reply to this email.</p>
+            </div>
+        </body>
+        </html>
+      `;
+      
+      await this.mailerService.sendMail({
+        to: email,
+        subject: 'New Device Login - Security Notification',
+        html: htmlContent,
+      });
+      
+      this.logger.log(`New device login notification sent successfully to: ${email}`);
+    } catch (error) {
+      this.logger.error(`Failed to send new device login notification to ${email}:`, error);
+      // Don't throw - email failure shouldn't block login
+    }
+  }
+
+  async sendMfaEnabledNotification(email: string): Promise<void> {
+    try {
+      this.logger.log(`Attempting to send MFA enabled notification to: ${email}`);
+      
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <title>Two-Factor Authentication Enabled</title>
+            <style>
+                body {
+                    font-family: Arial, sans-serif;
+                    line-height: 1.6;
+                    color: #333;
+                    max-width: 600px;
+                    margin: 0 auto;
+                    padding: 20px;
+                }
+                .header {
+                    background-color: #28a745;
+                    color: white;
+                    padding: 20px;
+                    text-align: center;
+                    border-radius: 5px;
+                }
+                .footer {
+                    margin-top: 30px;
+                    padding-top: 20px;
+                    border-top: 1px solid #eee;
+                    font-size: 12px;
+                    color: #666;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h1>Two-Factor Authentication Enabled</h1>
+            </div>
+            
+            <p>Hello,</p>
+            
+            <p>Two-factor authentication (2FA) has been successfully enabled on your account.</p>
+            
+            <p><strong>What this means:</strong></p>
+            <ul>
+                <li>You will need to enter a verification code from your authenticator app when logging in</li>
+                <li>Your account is now more secure</li>
+                <li>You can disable 2FA anytime from your account settings</li>
+            </ul>
+            
+            <p><strong>Important:</strong></p>
+            <ul>
+                <li>If you did not enable 2FA, please contact support immediately</li>
+                <li>Keep your authenticator app secure</li>
+            </ul>
+            
+            <div class="footer">
+                <p>This is an automated security notification. Please do not reply to this email.</p>
+            </div>
+        </body>
+        </html>
+      `;
+      
+      await this.mailerService.sendMail({
+        to: email,
+        subject: 'Two-Factor Authentication Enabled - Security Notification',
+        html: htmlContent,
+      });
+      
+      this.logger.log(`MFA enabled notification sent successfully to: ${email}`);
+    } catch (error) {
+      this.logger.error(`Failed to send MFA enabled notification to ${email}:`, error);
+      // Don't throw - email failure shouldn't block MFA enable
+    }
+  }
+
+  async sendMfaDisabledNotification(email: string): Promise<void> {
+    try {
+      this.logger.log(`Attempting to send MFA disabled notification to: ${email}`);
+      
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <title>Two-Factor Authentication Disabled</title>
+            <style>
+                body {
+                    font-family: Arial, sans-serif;
+                    line-height: 1.6;
+                    color: #333;
+                    max-width: 600px;
+                    margin: 0 auto;
+                    padding: 20px;
+                }
+                .header {
+                    background-color: #ffc107;
+                    color: #333;
+                    padding: 20px;
+                    text-align: center;
+                    border-radius: 5px;
+                }
+                .footer {
+                    margin-top: 30px;
+                    padding-top: 20px;
+                    border-top: 1px solid #eee;
+                    font-size: 12px;
+                    color: #666;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h1>Two-Factor Authentication Disabled</h1>
+            </div>
+            
+            <p>Hello,</p>
+            
+            <p>Two-factor authentication (2FA) has been disabled on your account.</p>
+            
+            <p><strong>Important:</strong></p>
+            <ul>
+                <li>If you did not disable 2FA, please contact support immediately</li>
+                <li>Your account security has been reduced</li>
+                <li>Consider re-enabling 2FA for better security</li>
+            </ul>
+            
+            <div class="footer">
+                <p>This is an automated security notification. Please do not reply to this email.</p>
+            </div>
+        </body>
+        </html>
+      `;
+      
+      await this.mailerService.sendMail({
+        to: email,
+        subject: 'Two-Factor Authentication Disabled - Security Notification',
+        html: htmlContent,
+      });
+      
+      this.logger.log(`MFA disabled notification sent successfully to: ${email}`);
+    } catch (error) {
+      this.logger.error(`Failed to send MFA disabled notification to ${email}:`, error);
+      // Don't throw - email failure shouldn't block MFA disable
+    }
+  }
+
+  async sendPasswordExpiryWarning(email: string, daysRemaining: number): Promise<void> {
+    try {
+      this.logger.log(`Attempting to send password expiry warning to: ${email}`);
+      
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <title>Password Expiry Warning</title>
+            <style>
+                body {
+                    font-family: Arial, sans-serif;
+                    line-height: 1.6;
+                    color: #333;
+                    max-width: 600px;
+                    margin: 0 auto;
+                    padding: 20px;
+                }
+                .header {
+                    background-color: #ffc107;
+                    color: #333;
+                    padding: 20px;
+                    text-align: center;
+                    border-radius: 5px;
+                }
+                .warning-box {
+                    background-color: #fff3cd;
+                    border-left: 4px solid #ffc107;
+                    padding: 15px;
+                    margin: 20px 0;
+                }
+                .footer {
+                    margin-top: 30px;
+                    padding-top: 20px;
+                    border-top: 1px solid #eee;
+                    font-size: 12px;
+                    color: #666;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h1>Password Expiry Warning</h1>
+            </div>
+            
+            <p>Hello,</p>
+            
+            <p>Your password will expire in ${daysRemaining} day(s). Please change your password soon to avoid being locked out of your account.</p>
+            
+            <div class="warning-box">
+                <p><strong>Action Required:</strong></p>
+                <p>Please change your password within the next ${daysRemaining} day(s) to maintain access to your account.</p>
+            </div>
+            
+            <p>You can change your password from your account settings or profile page.</p>
+            
+            <div class="footer">
+                <p>This is an automated security notification. Please do not reply to this email.</p>
+            </div>
+        </body>
+        </html>
+      `;
+      
+      await this.mailerService.sendMail({
+        to: email,
+        subject: `Password Expiry Warning - ${daysRemaining} Day(s) Remaining`,
+        html: htmlContent,
+      });
+      
+      this.logger.log(`Password expiry warning sent successfully to: ${email}`);
+    } catch (error) {
+      this.logger.error(`Failed to send password expiry warning to ${email}:`, error);
+      // Don't throw - email failure shouldn't block operations
     }
   }
 

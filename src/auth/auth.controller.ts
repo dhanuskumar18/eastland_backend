@@ -409,6 +409,7 @@ export class AuthController {
   }
 
   @UseGuards(JwtGuard)
+  @SkipCsrf() // Skip CSRF for MFA endpoints (authenticated user)
   @Post("mfa/generate")
   async generateMfaSecret(
     @GetUser("id") userId: number,
@@ -418,6 +419,7 @@ export class AuthController {
   }
 
   @UseGuards(JwtGuard)
+  @SkipCsrf() // Skip CSRF for MFA endpoints (authenticated user)
   @Post("mfa/enable")
   async enableMfa(
     @GetUser("id") userId: number,
@@ -427,6 +429,7 @@ export class AuthController {
   }
 
   @UseGuards(JwtGuard)
+  @SkipCsrf() // Skip CSRF for MFA endpoints (authenticated user)
   @Post("mfa/disable")
   async disableMfa(
     @GetUser("id") userId: number,
