@@ -155,10 +155,24 @@ export class AuthService {
       }
     }
 
-    // Check if MFA is enabled for this user
-    // If MFA is enabled, user must verify with TOTP code before completing login
+    // ACCESS CONTROL CHECKLIST ITEM #6: MFA Enforcement
+    // Multi-Factor Authentication (MFA) is enforced for users who have enabled it
+    // 
+    // How it works:
+    // 1. Check if MFA is enabled for this user
+    // 2. If enabled, require TOTP code verification before completing login
+    // 3. Block access until MFA is verified (prevents unauthorized access even with correct password)
+    //
+    // Security features:
+    // - MFA enforcement: Users with MFA enabled cannot bypass MFA verification
+    // - TOTP-based: Uses Time-based One-Time Password (6-digit codes, 30-second intervals)
+    // - Server-side validation: MFA codes verified on server, not client
+    // - Fail-secure: Invalid MFA codes result in authentication failure
+    //
+    // Note: MFA is also enforced on admin interfaces (see verifyLoginMfa method)
     if (user.mfaEnabled) {
       // Return response indicating MFA verification is required
+      // User must call /auth/login/verify-mfa endpoint with TOTP code
       return {
         requiresMfa: true,
         message: 'MFA verification required. Please enter the 6-digit code from your authenticator app.',

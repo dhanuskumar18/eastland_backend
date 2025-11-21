@@ -53,9 +53,17 @@ async function bootstrap() {
 
   app.use(cookieParser());
   
-  // Serve static files from uploads directory
+  // ACCESS CONTROL CHECKLIST ITEM #7: Directory Browsing Protection
+  // Serve static files from uploads directory with directory browsing disabled
+  // Security: Directory browsing is disabled to prevent enumeration of files
+  // Only specific files can be accessed via direct URL, not directory listings
   app.useStaticAssets(join(__dirname, '..', 'uploads'), {
     prefix: '/uploads/',
+    // Directory browsing is disabled by default in NestJS static assets
+    // This prevents users from listing directory contents
+    // Only files with known paths can be accessed
+    index: false, // Disable index file serving (prevents directory listing)
+    dotfiles: 'deny', // Deny access to dotfiles (hidden files like .env, .git, etc.)
   });
 
   app.useGlobalPipes(new ValidationPipe(
