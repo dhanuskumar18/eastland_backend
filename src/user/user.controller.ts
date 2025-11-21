@@ -25,8 +25,17 @@ export class UserController {
   @UseGuards(JwtGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @Post()
-  create(@Body() dto: CreateUserDto) {
-    return this.userService.create(dto);
+  create(
+    @Body() dto: CreateUserDto,
+    @GetUser() user: User,
+    @Req() req: Request,
+  ) {
+    return this.userService.create(
+      dto,
+      user.id,
+      req.ip,
+      req.get('user-agent'),
+    );
   }
 
   @UseGuards(JwtGuard, RolesGuard)
@@ -51,21 +60,52 @@ export class UserController {
   @UseGuards(JwtGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @Patch(':id/status')
-  toggleStatus(@Param('id', ParseIntPipe) id: number, @Body() dto: ToggleStatusDto) {
-    return this.userService.toggleStatus(id, dto);
+  toggleStatus(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: ToggleStatusDto,
+    @GetUser() user: User,
+    @Req() req: Request,
+  ) {
+    return this.userService.toggleStatus(
+      id,
+      dto,
+      user.id,
+      req.ip,
+      req.get('user-agent'),
+    );
   }
 
   @UseGuards(JwtGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @Patch(':id')
-  update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateUserDto) {
-    return this.userService.update(id, dto);
+  update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateUserDto,
+    @GetUser() user: User,
+    @Req() req: Request,
+  ) {
+    return this.userService.update(
+      id,
+      dto,
+      user.id,
+      req.ip,
+      req.get('user-agent'),
+    );
   }
 
   @UseGuards(JwtGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @Delete(':id')
-  remove(@Param('id', ParseIntPipe) id: number) {
-    return this.userService.remove(id);
+  remove(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser() user: User,
+    @Req() req: Request,
+  ) {
+    return this.userService.remove(
+      id,
+      user.id,
+      req.ip,
+      req.get('user-agent'),
+    );
   }
 }

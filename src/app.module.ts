@@ -8,7 +8,7 @@ import { DatabaseModule } from './database/database.module';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_FILTER } from '@nestjs/core';
 import { DoubleSubmitCsrfGuard } from './auth/csrf/csrf.guard';
 import { UserStatusGuard } from './auth/guard/user-status.guard';
 import { PagesModule } from './pages/pages.module';
@@ -24,10 +24,13 @@ import { TestimonialsModule } from './testimonials/testimonials.module';
 import { YouTubeVideosModule } from './youtube-videos/youtube-videos.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { ContactSubmissionsModule } from './contact-submissions/contact-submissions.module';
+import { CommonModule } from './common/common.module';
+import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 
 @Module({
   controllers: [AppController],
   imports: [
+    CommonModule, // Global module for audit logging and utilities
     AuthModule,
     SessionModule,
     EmailModule,
@@ -79,6 +82,11 @@ import { ContactSubmissionsModule } from './contact-submissions/contact-submissi
     ]),
   ],
   providers: [
+    // ERROR HANDLING & LOGGING CHECKLIST ITEM #9: Global exception filter
+    {
+      provide: APP_FILTER,
+      useClass: HttpExceptionFilter,
+    },
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,

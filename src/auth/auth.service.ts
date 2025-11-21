@@ -10,9 +10,14 @@ import { SessionService } from '../session/session.service';
 import { DeviceDetectionService } from '../session/device-detection.service';
 import { MfaService } from './mfa.service';
 import { PasswordValidator } from './utils/password-validator';
+import { AuditLogService, AuditAction } from '../common/services/audit-log.service';
 import type { Response, Request } from 'express';
 import * as crypto from 'crypto';
 
+/**
+ * ERROR HANDLING & LOGGING CHECKLIST ITEMS #3, #5:
+ * Enhanced security event logging for authentication
+ */
 @Injectable()
 export class AuthService {
   constructor(
@@ -23,6 +28,7 @@ export class AuthService {
     private sessionService: SessionService,
     private deviceDetection: DeviceDetectionService,
     private mfaService: MfaService,
+    private auditLog: AuditLogService,
   ) {}
   async signin(dto: AuthDto, res: Response, req: Request) {
     const user = await this.prisma.user.findUnique({
@@ -35,6 +41,18 @@ export class AuthService {
     });
     
     if (!user) {
+      // AUDIT LOG: Failed login - user not found
+      await this.auditLog.logAuth(
+        AuditAction.LOGIN_FAILURE,
+        null,
+        false,
+        {
+          ipAddress: req.ip,
+          userAgent: req.get('user-agent'),
+          errorMessage: 'Invalid credentials - user not found',
+          additionalInfo: { email: dto.email },
+        }
+      );
       // Don't reveal if user exists for security
       throw new ForbiddenException('Credentials incorrect');
     }
@@ -42,6 +60,20 @@ export class AuthService {
     // Check if account is locked
     if (user.lockedUntil && user.lockedUntil > new Date()) {
       const minutesRemaining = Math.ceil((user.lockedUntil.getTime() - Date.now()) / (1000 * 60));
+      
+      // AUDIT LOG: Login attempt on locked account
+      await this.auditLog.logAuth(
+        AuditAction.LOGIN_LOCKED,
+        user.id,
+        false,
+        {
+          ipAddress: req.ip,
+          userAgent: req.get('user-agent'),
+          errorMessage: 'Account locked',
+          additionalInfo: { lockedUntil: user.lockedUntil, minutesRemaining },
+        }
+      );
+      
       throw new ForbiddenException({
         message: `Account is locked due to too many failed login attempts. Please try again in ${minutesRemaining} minute(s).`,
         code: 'ACCOUNT_LOCKED',
@@ -93,6 +125,19 @@ export class AuthService {
           data: updateData,
         });
 
+        // AUDIT LOG: Account locked due to failed attempts
+        await this.auditLog.logAuth(
+          AuditAction.LOGIN_LOCKED,
+          user.id,
+          false,
+          {
+            ipAddress: req.ip,
+            userAgent: req.get('user-agent'),
+            errorMessage: `Account locked after ${MAX_FAILED_ATTEMPTS} failed attempts`,
+            additionalInfo: { lockedUntil, failedAttempts: newFailedAttempts },
+          }
+        );
+
         throw new ForbiddenException({
           message: `Account has been locked due to ${MAX_FAILED_ATTEMPTS} failed login attempts. Please try again in ${LOCKOUT_DURATION_MINUTES} minutes.`,
           code: 'ACCOUNT_LOCKED',
@@ -106,6 +151,22 @@ export class AuthService {
         where: { id: user.id },
         data: updateData,
       });
+
+      // AUDIT LOG: Failed login attempt
+      await this.auditLog.logAuth(
+        AuditAction.LOGIN_FAILURE,
+        user.id,
+        false,
+        {
+          ipAddress: req.ip,
+          userAgent: req.get('user-agent'),
+          errorMessage: 'Invalid password',
+          additionalInfo: { 
+            failedAttempts: newFailedAttempts,
+            attemptsRemaining: MAX_FAILED_ATTEMPTS - newFailedAttempts,
+          },
+        }
+      );
 
       const attemptsRemaining = MAX_FAILED_ATTEMPTS - newFailedAttempts;
       throw new ForbiddenException({
@@ -182,6 +243,18 @@ export class AuthService {
     }
 
     // MFA not enabled, proceed with normal login
+    // AUDIT LOG: Successful login
+    await this.auditLog.logAuth(
+      AuditAction.LOGIN_SUCCESS,
+      user.id,
+      true,
+      {
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent'),
+        additionalInfo: { mfaEnabled: false },
+      }
+    );
+    
     // Security: New session token generated upon each successful authentication (session fixation prevention)
     return this.signTokenWithCookie(user, res, req);
    }
@@ -825,6 +898,9 @@ export class AuthService {
         try {
           const currentSession = await this.sessionService.getUserSessions(userId);
           const deviceInfo = currentSession.length > 0 ? currentSession[0].deviceInfo : {};
+          const ipAddress = currentSession.length > 0 ? currentSession[0].ipAddress : undefined;
+          const userAgent = currentSession.length > 0 ? currentSession[0].userAgent : undefined;
+          
           await this.emailService.sendEmailChangeNotification(
             oldEmail,
             updateData.email,
@@ -832,13 +908,41 @@ export class AuthService {
               browser: (deviceInfo as any)?.browser,
               os: (deviceInfo as any)?.os,
               device: (deviceInfo as any)?.device,
-              ipAddress: currentSession.length > 0 ? currentSession[0].ipAddress : undefined,
+              ipAddress,
             }
           );
+
+          // AUDIT LOG: Email changed
+          await this.auditLog.logSuccess({
+            userId,
+            action: AuditAction.EMAIL_CHANGED,
+            resource: 'User',
+            resourceId: userId,
+            details: {
+              oldEmail,
+              newEmail: updateData.email,
+            },
+            ipAddress,
+            userAgent,
+          });
         } catch (error) {
           // Don't fail profile update if email fails
           console.error('Failed to send email change notification:', error);
         }
+      }
+
+      // AUDIT LOG: Profile updated
+      if (Object.keys(updateData).length > 0) {
+        const currentSession = await this.sessionService.getUserSessions(userId);
+        await this.auditLog.logSuccess({
+          userId,
+          action: AuditAction.PROFILE_UPDATED,
+          resource: 'User',
+          resourceId: userId,
+          details: { changes: updateData },
+          ipAddress: currentSession.length > 0 ? currentSession[0].ipAddress : undefined,
+          userAgent: currentSession.length > 0 ? currentSession[0].userAgent : undefined,
+        });
       }
 
       return {
@@ -950,22 +1054,41 @@ export class AuthService {
     await this.sessionService.revokeAllUserSessions(user.id);
 
     // Send password change notification email
+    let ipAddress: string | undefined;
+    let userAgent: string | undefined;
     try {
       const currentSession = await this.sessionService.getUserSessions(user.id);
       const deviceInfo = currentSession.length > 0 ? currentSession[0].deviceInfo : {};
+      ipAddress = currentSession.length > 0 ? currentSession[0].ipAddress : undefined;
+      userAgent = currentSession.length > 0 ? currentSession[0].userAgent : undefined;
+      
       await this.emailService.sendPasswordChangeNotification(
         user.email,
         {
           browser: (deviceInfo as any)?.browser,
           os: (deviceInfo as any)?.os,
           device: (deviceInfo as any)?.device,
-          ipAddress: currentSession.length > 0 ? currentSession[0].ipAddress : undefined,
+          ipAddress,
         }
       );
     } catch (error) {
       // Don't fail password change if email fails
       console.error('Failed to send password change notification:', error);
     }
+
+    // AUDIT LOG: Password changed
+    await this.auditLog.logSuccess({
+      userId: user.id,
+      action: AuditAction.PASSWORD_CHANGED,
+      resource: 'User',
+      resourceId: user.id,
+      details: {
+        allSessionsRevoked: true,
+        method: 'user-initiated',
+      },
+      ipAddress,
+      userAgent,
+    });
 
     return {
       success: true,
