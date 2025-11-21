@@ -28,7 +28,11 @@ export class SessionController {
    */
   @Get()
   async getUserSessions(@GetUser('id') userId: number) {
-    return this.sessionService.getUserSessions(userId);
+    const sessions = await this.sessionService.getUserSessions(userId);
+    return {
+      success: true,
+      data: sessions,
+    };
   }
 
   /**

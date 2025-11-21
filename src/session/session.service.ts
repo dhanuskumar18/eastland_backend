@@ -100,6 +100,7 @@ export class SessionService {
 
   /**
    * Get all active sessions for a user
+   * Returns only the most recent session per unique device (browser + OS + IP)
    */
   async getUserSessions(userId: number): Promise<SessionData[]> {
     const sessions = await this.prisma.session.findMany({
@@ -111,7 +112,32 @@ export class SessionService {
       orderBy: { lastUsed: 'desc' },
     });
 
-    return sessions.map(session => this.mapSessionToData(session));
+    const mappedSessions = sessions.map(session => this.mapSessionToData(session));
+
+    // Group sessions by device signature (browser + OS + IP) and keep only the most recent one
+    const deviceMap = new Map<string, SessionData>();
+    
+    for (const session of mappedSessions) {
+      const deviceInfo = session.deviceInfo || {};
+      const browser = (deviceInfo as any)?.browser || 'Unknown';
+      const os = (deviceInfo as any)?.os || 'Unknown';
+      const ip = session.ipAddress || 'Unknown';
+      
+      // Create a unique device signature
+      const deviceSignature = `${browser}-${os}-${ip}`;
+      
+      // Keep only the most recent session for each device
+      const existing = deviceMap.get(deviceSignature);
+      if (!existing || new Date(session.lastUsed) > new Date(existing.lastUsed)) {
+        deviceMap.set(deviceSignature, session);
+      }
+    }
+
+    // Convert map values back to array and sort by lastUsed descending
+    const uniqueSessions = Array.from(deviceMap.values());
+    uniqueSessions.sort((a, b) => new Date(b.lastUsed).getTime() - new Date(a.lastUsed).getTime());
+
+    return uniqueSessions;
   }
 
   /**
@@ -123,6 +149,31 @@ export class SessionService {
     });
 
     return session ? this.mapSessionToData(session) : null;
+  }
+
+  /**
+   * Get session by tokenId
+   */
+  async getSessionByTokenId(tokenId: string): Promise<SessionData | null> {
+    const session = await this.prisma.session.findUnique({
+      where: { tokenId, isActive: true },
+    });
+
+    if (!session || session.expiresAt < new Date()) {
+      return null;
+    }
+
+    return this.mapSessionToData(session);
+  }
+
+  /**
+   * Update session last used timestamp
+   */
+  async updateSessionLastUsed(sessionId: string): Promise<void> {
+    await this.prisma.session.update({
+      where: { id: sessionId },
+      data: { lastUsed: new Date() },
+    });
   }
 
   /**

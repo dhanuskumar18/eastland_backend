@@ -171,8 +171,9 @@ export class AuthService {
     return this.signTokenWithCookie(user, res, req);
    }
 
-    async signTokenWithCookie(user: { id: number; email: string; name: string | null; status: string; role: { name: string } }, res: Response, req?: Request): Promise<TokenResponseDto> {
-      const tokenId = crypto.randomUUID(); // Generate unique token ID for session tracking
+    async signTokenWithCookie(user: { id: number; email: string; name: string | null; status: string; role: { name: string } }, res: Response, req?: Request, existingTokenId?: string): Promise<TokenResponseDto> {
+      // Use existing tokenId if provided (for token refresh), otherwise generate new one (for new login)
+      const tokenId = existingTokenId || crypto.randomUUID();
       const payload = {
         sub: user.id,
         email: user.email,
@@ -191,30 +192,43 @@ export class AuthService {
         secret: this.config.get('JWT_REFRESH_SECRET'),
       });
 
-      // Create session if request is available
+      // Handle session creation/update if request is available
       if (req) {
-        const sessionData = await this.sessionService.createSession(user.id, tokenId, req);
-        
-        // Check if this is a new device/login and send notification
-        try {
-          const allSessions = await this.sessionService.getUserSessions(user.id);
-          // If this is the only session, send new device notification
-          // Or if device/browser/IP is different from previous sessions
-          if (allSessions.length === 1 || this.isNewDeviceLogin(sessionData, allSessions)) {
-            const deviceInfo = sessionData.deviceInfo || {};
-            await this.emailService.sendNewDeviceLoginNotification(
-              user.email,
-              {
-                browser: (deviceInfo as any)?.browser,
-                os: (deviceInfo as any)?.os,
-                device: (deviceInfo as any)?.device,
-                ipAddress: sessionData.ipAddress,
-              }
-            );
+        if (existingTokenId) {
+          // Token refresh: Update existing session instead of creating new one
+          const existingSession = await this.sessionService.getSessionByTokenId(existingTokenId);
+          if (existingSession) {
+            // Update lastUsed timestamp for existing session
+            await this.sessionService.updateSessionLastUsed(existingSession.id);
+          } else {
+            // Session not found, create a new one (fallback for edge cases)
+            await this.sessionService.createSession(user.id, tokenId, req);
           }
-        } catch (error) {
-          // Don't fail login if notification fails
-          console.error('Failed to send new device login notification:', error);
+        } else {
+          // New login: Create new session
+          const sessionData = await this.sessionService.createSession(user.id, tokenId, req);
+          
+          // Check if this is a new device/login and send notification
+          try {
+            const allSessions = await this.sessionService.getUserSessions(user.id);
+            // If this is the only session, send new device notification
+            // Or if device/browser/IP is different from previous sessions
+            if (allSessions.length === 1 || this.isNewDeviceLogin(sessionData, allSessions)) {
+              const deviceInfo = sessionData.deviceInfo || {};
+              await this.emailService.sendNewDeviceLoginNotification(
+                user.email,
+                {
+                  browser: (deviceInfo as any)?.browser,
+                  os: (deviceInfo as any)?.os,
+                  device: (deviceInfo as any)?.device,
+                  ipAddress: sessionData.ipAddress,
+                }
+              );
+            }
+          } catch (error) {
+            // Don't fail login if notification fails
+            console.error('Failed to send new device login notification:', error);
+          }
         }
       }
 
@@ -367,8 +381,9 @@ export class AuthService {
         throw new ForbiddenException('Session invalid or expired');
       }
 
-      // Generate new tokens
-      return this.signTokenWithCookie(user, res, req);
+      // Generate new tokens with the SAME tokenId to reuse the existing session
+      // This prevents creating duplicate sessions on every token refresh
+      return this.signTokenWithCookie(user, res, req, tokenId);
     } catch (error) {
       // Handle JWT verification errors specifically
       if (error.name === 'JsonWebTokenError') {
