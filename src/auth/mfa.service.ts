@@ -77,12 +77,15 @@ export class MfaService {
       throw new BadRequestException('MFA secret not generated. Please generate a secret first.');
     }
 
-    // Verify the token
+    // Verify the token using TOTP (Time-based One-Time Password)
+    // TOTP uses 30-second time steps by default
+    // Window of 2 means we accept codes from 1 step before and 1 step after (60 seconds total tolerance)
     const verified = speakeasy.totp.verify({
       secret: user.mfaSecret,
       encoding: 'base32',
       token: token,
-      window: 2, // Allow 2 time steps (60 seconds) of tolerance
+      window: 2, // Allow 2 time steps (60 seconds) of tolerance for clock skew
+      step: 30, // 30-second time step (standard TOTP)
     });
 
     if (!verified) {
@@ -155,12 +158,15 @@ export class MfaService {
       return false;
     }
 
-    // Verify TOTP token
+    // Verify TOTP token (Time-based One-Time Password)
+    // TOTP uses 30-second time steps by default
+    // Window of 2 means we accept codes from 1 step before and 1 step after (60 seconds total tolerance)
     const verified = speakeasy.totp.verify({
       secret: user.mfaSecret,
       encoding: 'base32',
       token: token,
-      window: 2,
+      window: 2, // Allow 2 time steps (60 seconds) of tolerance for clock skew
+      step: 30, // 30-second time step (standard TOTP)
     });
 
     return verified;

@@ -156,16 +156,18 @@ export class AuthService {
     }
 
     // Check if MFA is enabled for this user
+    // If MFA is enabled, user must verify with TOTP code before completing login
     if (user.mfaEnabled) {
       // Return response indicating MFA verification is required
       return {
         requiresMfa: true,
-        message: 'MFA verification required',
+        message: 'MFA verification required. Please enter the 6-digit code from your authenticator app.',
         userId: user.id,
         email: user.email,
       } as any;
     }
 
+    // MFA not enabled, proceed with normal login
     return this.signTokenWithCookie(user, res, req);
    }
 
@@ -948,13 +950,40 @@ export class AuthService {
       throw new BadRequestException('MFA is not enabled for this account');
     }
 
-    // Verify MFA token
-    const isValid = await this.mfaService.verifyMfaToken(user.id, token);
-    if (!isValid) {
-      throw new ForbiddenException('Invalid MFA code');
+    // Check if MFA secret exists
+    if (!user.mfaSecret) {
+      throw new BadRequestException('MFA secret not found. Please set up MFA again.');
     }
 
-    // MFA verified, complete login
+    // Verify MFA token using TOTP (Time-based One-Time Password)
+    // TOTP codes are 6-digit codes that change every 30 seconds
+    const isValid = await this.mfaService.verifyMfaToken(user.id, token);
+    if (!isValid) {
+      throw new ForbiddenException({
+        message: 'Invalid MFA code. Please check your authenticator app and try again.',
+        code: 'INVALID_MFA_CODE',
+      });
+    }
+
+    // MFA verified successfully, complete login
+    // Check password expiry before completing login
+    if (!user.passwordChangedAt) {
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { passwordChangedAt: new Date() },
+      });
+      user.passwordChangedAt = new Date();
+    }
+
+    const passwordExpiry = this.checkPasswordExpiry(user.passwordChangedAt);
+    if (passwordExpiry.expired) {
+      throw new ForbiddenException({
+        message: 'Your password has expired. Please change your password to continue.',
+        code: 'PASSWORD_EXPIRED',
+        daysExpired: passwordExpiry.daysSinceChange - 90,
+      });
+    }
+
     return this.signTokenWithCookie(user, res, req);
   }
 
