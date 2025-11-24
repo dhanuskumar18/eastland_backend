@@ -46,15 +46,10 @@ export class SessionService {
   ): Promise<SessionData> {
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
-    // Mark all other sessions as not current
-    await this.prisma.session.updateMany({
-      where: { userId, isActive: true },
-      data: { isCurrent: false },
-    });
-
     // Detect device info if not provided
     const detectedDeviceInfo = deviceInfo || this.deviceDetection.detectDevice(req);
 
+    // Create session first, then update others in background (faster)
     const session = await this.prisma.session.create({
       data: {
         userId,
@@ -67,8 +62,17 @@ export class SessionService {
       },
     });
 
-    // Log session creation
-    await this.logSessionActivity(session.id, 'LOGIN', req);
+    // Mark all other sessions as not current (non-blocking - run in background)
+    // Do this AFTER creating the new session to avoid blocking
+    this.prisma.session.updateMany({
+      where: { userId, isActive: true, id: { not: session.id } },
+      data: { isCurrent: false },
+    }).catch((error) => {
+      this.logger.error(`Failed to update other sessions: ${error.message}`, error.stack);
+    });
+
+    // Log session creation (non-blocking for login performance)
+    this.logSessionActivityAsync(session.id, 'LOGIN', req);
 
     this.logger.log(`New session created for user ${userId}: ${session.id}`);
     return this.mapSessionToData(session);
@@ -369,6 +373,22 @@ export class SessionService {
     } catch (error) {
       this.logger.error(`Failed to log session activity: ${error.message}`);
     }
+  }
+
+  /**
+   * Log session activity asynchronously (non-blocking)
+   * Use this for login flows to prevent blocking the response
+   */
+  private logSessionActivityAsync(
+    sessionId: string,
+    action: string,
+    req: Request | null,
+    details?: any,
+  ): void {
+    // Fire and forget - don't await to avoid blocking the response
+    this.logSessionActivity(sessionId, action, req, details).catch((error) => {
+      this.logger.error(`Failed to create async session activity log: ${error.message}`, error.stack);
+    });
   }
 
   /**

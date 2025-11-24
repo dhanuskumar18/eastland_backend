@@ -45,6 +45,8 @@ export class AuthController {
     @Res() res: Response,
     @Req() req: Request
   ) {
+    console.log('\n\n🚀 LOGIN ENDPOINT HIT - Controller');
+    console.log(`⏰ Time: ${new Date().toISOString()}\n`);
     try {
       const result = await this.authService.signin(dto, res, req);
       // If MFA is required, return the requiresMfa response
@@ -234,7 +236,7 @@ export class AuthController {
    * Get CSRF token with double-submit cookie pattern
    */
   @SkipCsrf()
-  @Throttle({ short: { limit: 10, ttl: 60000 } })
+  @Throttle({ medium: { limit: 50, ttl: 60000 } }) // Increased limit for CSRF token requests
   @Get("csrf-token/double-submit")
   async getDoubleSubmitCsrfToken(@Req() req: Request, @Res() res: Response) {
     try {

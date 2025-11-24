@@ -33,6 +33,13 @@ export class AuthService {
     private auditLog: AuditLogService,
   ) {}
   async signin(dto: AuthDto, res: Response, req: Request) {
+    console.log('\n\n╔═══════════════════════════════════════════════════════════╗');
+    console.log('║           🔐 LOGIN REQUEST STARTED                        ║');
+    console.log('╚═══════════════════════════════════════════════════════════╝');
+    console.log(`📧 Email: ${dto.email}`);
+    console.log(`⏰ Time: ${new Date().toISOString()}\n`);
+    const startTime = Date.now();
+    // Keep JOIN - it's usually faster than separate queries
     const user = await this.prisma.user.findUnique({
       where: {
         email: dto.email,
@@ -41,6 +48,11 @@ export class AuthService {
         role: true,
       },
     });
+    const dbQueryTime = Date.now() - startTime;
+    if (dbQueryTime > 1000) {
+      console.warn(`⚠️  SLOW DB QUERY: User lookup took ${dbQueryTime}ms`);
+      this.logger.warn(`SLOW DB QUERY: User lookup took ${dbQueryTime}ms`);
+    }
     
     if (!user) {
       // AUDIT LOG: Failed login - user not found
@@ -97,7 +109,13 @@ export class AuthService {
     }
 
     // Verify password
+    const verifyStart = Date.now();
     const pwMatches = await argon.verify(user.password, dto.password);
+    const verifyTime = Date.now() - verifyStart;
+    if (verifyTime > 1000) {
+      console.warn(`⚠️  SLOW PASSWORD VERIFY: Argon verify took ${verifyTime}ms`);
+      this.logger.warn(`SLOW PASSWORD VERIFY: Argon verify took ${verifyTime}ms`);
+    }
     
     if (!pwMatches) {
       // Increment failed login attempts
@@ -260,7 +278,21 @@ export class AuthService {
     );
     
     // Security: New session token generated upon each successful authentication (session fixation prevention)
-    return this.signTokenWithCookie(user, res, req);
+    const tokenStart = Date.now();
+    const result = await this.signTokenWithCookie(user, res, req);
+    const tokenTime = Date.now() - tokenStart;
+    const totalTime = Date.now() - startTime;
+    // Use console.log to ensure logs appear in terminal
+    console.log('\n\n╔═══════════════════════════════════════════════════════════╗');
+    console.log('║              ⏱️  LOGIN TIMING BREAKDOWN                  ║');
+    console.log('╚═══════════════════════════════════════════════════════════╝');
+    console.log(`📊 Total Time:        ${totalTime}ms`);
+    console.log(`🗄️  DB Query:          ${dbQueryTime}ms`);
+    console.log(`🔒 Password Verify:   ${verifyTime}ms`);
+    console.log(`🎫 Token/Session:     ${tokenTime}ms`);
+    console.log('╔═══════════════════════════════════════════════════════════╗\n\n');
+    this.logger.log(`LOGIN TIMING - Total: ${totalTime}ms | DB: ${dbQueryTime}ms | Verify: ${verifyTime}ms | Token: ${tokenTime}ms`);
+    return result;
    }
 
     async signTokenWithCookie(user: { id: number; email: string; name: string | null; status: string; role: { name: string } }, res: Response, req?: Request, existingTokenId?: string): Promise<TokenResponseDto> {
@@ -305,38 +337,53 @@ export class AuthService {
           }
         } else {
           // New login: Create new session
+          const sessionStart = Date.now();
           const sessionData = await this.sessionService.createSession(user.id, tokenId, req);
-          
-          // Check if this is a new device/login and send notification
-          try {
-            const allSessions = await this.sessionService.getUserSessions(user.id);
-            // If this is the only session, send new device notification
-            // Or if device/browser/IP is different from previous sessions
-            if (allSessions.length === 1 || this.isNewDeviceLogin(sessionData, allSessions)) {
-              const deviceInfo = sessionData.deviceInfo || {};
-              await this.emailService.sendNewDeviceLoginNotification(
-                user.email,
-                {
-                  browser: (deviceInfo as any)?.browser,
-                  os: (deviceInfo as any)?.os,
-                  device: (deviceInfo as any)?.device,
-                  ipAddress: sessionData.ipAddress,
-                }
-              );
-            }
-          } catch (error) {
-            // Don't fail login if notification fails
-            console.error('Failed to send new device login notification:', error);
+          const sessionTime = Date.now() - sessionStart;
+          if (sessionTime > 1000) {
+            console.warn(`⚠️  SLOW SESSION CREATE: Session creation took ${sessionTime}ms`);
+            this.logger.warn(`SLOW SESSION CREATE: Session creation took ${sessionTime}ms`);
           }
+          
+          // Check if this is a new device/login and send notification (non-blocking)
+          // Don't await to avoid blocking login response
+          this.sessionService.getUserSessions(user.id)
+            .then((allSessions) => {
+              // If this is the only session, send new device notification
+              // Or if device/browser/IP is different from previous sessions
+              if (allSessions.length === 1 || this.isNewDeviceLogin(sessionData, allSessions)) {
+                const deviceInfo = sessionData.deviceInfo || {};
+                return this.emailService.sendNewDeviceLoginNotification(
+                  user.email,
+                  {
+                    browser: (deviceInfo as any)?.browser,
+                    os: (deviceInfo as any)?.os,
+                    device: (deviceInfo as any)?.device,
+                    ipAddress: sessionData.ipAddress,
+                  }
+                );
+              }
+            })
+            .catch((error) => {
+              // Don't fail login if notification fails
+              this.logger.error('Failed to send new device login notification:', error);
+            });
         }
       }
 
       // Hash and store refresh token in database (for backward compatibility)
-      const hashedRefreshToken = await argon.hash(refreshToken);
-      await this.prisma.user.update({
-        where: { id: user.id },
-        data: { refreshToken: hashedRefreshToken },
-      });
+      // Make this non-blocking to improve login performance
+      argon.hash(refreshToken)
+        .then((hashedRefreshToken) => {
+          return this.prisma.user.update({
+            where: { id: user.id },
+            data: { refreshToken: hashedRefreshToken },
+          });
+        })
+        .catch((error) => {
+          // Log error but don't fail login
+          this.logger.error(`Failed to store refresh token: ${error.message}`, error.stack);
+        });
 
       // Set refresh token in HTTP-only cookie
       // Cookie security attributes:

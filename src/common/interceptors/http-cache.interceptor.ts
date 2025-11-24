@@ -22,6 +22,11 @@ export class HttpCacheInterceptor implements NestInterceptor {
 
     return next.handle().pipe(
       tap(() => {
+        // Check if response has already been sent (prevents "headers already sent" error)
+        if (response.headersSent) {
+          return;
+        }
+        
         // Only cache GET requests
         if (request.method === 'GET') {
           // Set cache-control headers
