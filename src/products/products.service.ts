@@ -1,39 +1,53 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { PaginationDto } from '../brand/dto/pagination.dto';
+import { CacheService } from '../common/cache/cache.service';
 
 @Injectable()
 export class ProductsService {
-  constructor(private readonly db: DatabaseService) {}
+  private readonly logger = new Logger(ProductsService.name);
+  private readonly CACHE_TTL = 300; // 5 minutes
+  
+  constructor(
+    private readonly db: DatabaseService,
+    private readonly cache: CacheService,
+  ) {}
 
   async create(dto: CreateProductDto) {
-    // Validate brand exists
-    const brand = await this.db.brand.findUnique({ where: { id: dto.brandId } });
+    // Validate brand, category, and tags in parallel
+    const [brand, category, tags] = await Promise.all([
+      this.db.brand.findUnique({ 
+        where: { id: dto.brandId },
+        select: { id: true }
+      }),
+      this.db.category.findFirst({
+        where: { id: dto.categoryId, type: 'PRODUCT' },
+        select: { id: true }
+      }),
+      dto.tagIds && dto.tagIds.length > 0 
+        ? this.db.tag.findMany({
+            where: { id: { in: dto.tagIds }, type: 'PRODUCT' },
+            select: { id: true }
+          })
+        : Promise.resolve([]),
+    ]);
+
     if (!brand) throw new NotFoundException('Brand not found');
-
-    // Validate category exists and is PRODUCT type
-    const category = await this.db.category.findFirst({
-      where: { id: dto.categoryId, type: 'PRODUCT' },
-    });
     if (!category) throw new NotFoundException('Product category not found');
-
-    // Validate tags exist and are PRODUCT type
-    if (dto.tagIds && dto.tagIds.length > 0) {
-      const tags = await this.db.tag.findMany({
-        where: { id: { in: dto.tagIds }, type: 'PRODUCT' },
-      });
-      if (tags.length !== dto.tagIds.length) {
-        throw new NotFoundException('One or more tags not found');
-      }
+    if (dto.tagIds && dto.tagIds.length > 0 && tags.length !== dto.tagIds.length) {
+      throw new NotFoundException('One or more tags not found');
     }
 
     // Generate SKU if not provided
     const sku = dto.sku || this.generateSKU(dto.name);
     
     // Check if SKU already exists
-    const existingSku = await this.db.product.findUnique({ where: { sku } });
+    const existingSku = await this.db.product.findUnique({ 
+      where: { sku },
+      select: { id: true }
+    });
     if (existingSku) {
       throw new BadRequestException('SKU already exists. Please provide a unique SKU.');
     }
@@ -68,14 +82,32 @@ export class ProductsService {
           },
         } : undefined,
       },
-      include: {
-        brand: true,
-        categories: true,
-        tags: true,
-        images: true,
-        translations: true,
+      select: {
+        id: true,
+        sku: true,
+        brandId: true,
+        createdAt: true,
+        updatedAt: true,
+        brand: {
+          select: { id: true, name: true, slug: true }
+        },
+        categories: {
+          select: { id: true, name: true }
+        },
+        tags: {
+          select: { id: true, name: true }
+        },
+        images: {
+          select: { id: true, url: true, position: true },
+        },
+        translations: {
+          select: { id: true, locale: true, name: true, slug: true, description: true }
+        },
       },
     });
+
+    // Invalidate cache
+    await this.cache.delPattern('products:*');
 
     return product;
   }
@@ -86,19 +118,45 @@ export class ProductsService {
       const limit = paginationDto.limit ?? 10;
       const skip = (page - 1) * limit;
 
+      // Cache key based on pagination params
+      const cacheKey = `products:paginated:${page}:${limit}`;
+      
+      // Try to get from cache first
+      const cached = await this.cache.get(cacheKey);
+      if (cached) {
+        this.logger.debug(`Cache hit for ${cacheKey}`);
+        return cached;
+      }
+
       const [data, total] = await Promise.all([
         this.db.product.findMany({
           skip,
           take: limit,
           orderBy: { id: 'desc' },
-          include: {
-            brand: true,
-            categories: true,
-            tags: true,
+          select: {
+            id: true,
+            sku: true,
+            brandId: true,
+            createdAt: true,
+            updatedAt: true,
+            brand: {
+              select: { id: true, name: true }
+            },
+            categories: {
+              select: { id: true, name: true },
+              take: 1, // Only first category for list view
+            },
+            tags: {
+              select: { id: true, name: true },
+              take: 3, // Limit tags for list view
+            },
             images: {
+              select: { id: true, url: true },
               orderBy: { position: 'asc' },
+              take: 1, // Only get first image for list view
             },
             translations: {
+              select: { id: true, name: true },
               where: { locale: 'en' },
               take: 1,
             },
@@ -109,7 +167,7 @@ export class ProductsService {
 
       const totalPages = Math.ceil(total / limit);
 
-      return {
+      const result = {
         data,
         meta: {
           page,
@@ -120,76 +178,140 @@ export class ProductsService {
           hasPreviousPage: page > 1,
         },
       };
+
+      // Cache the result
+      await this.cache.set(cacheKey, result, this.CACHE_TTL);
+      
+      return result;
     }
 
-    return this.db.product.findMany({
+    // For non-paginated requests, use cache
+    const cacheKey = 'products:all';
+    const cached = await this.cache.get(cacheKey);
+    if (cached) {
+      this.logger.debug(`Cache hit for ${cacheKey}`);
+      return cached;
+    }
+
+    const data = await this.db.product.findMany({
       orderBy: { id: 'desc' },
-      include: {
-        brand: true,
-        categories: true,
-        tags: true,
+      select: {
+        id: true,
+        sku: true,
+        brandId: true,
+        createdAt: true,
+        updatedAt: true,
+        brand: {
+          select: { id: true, name: true, slug: true }
+        },
+        categories: {
+          select: { id: true, name: true }
+        },
+        tags: {
+          select: { id: true, name: true }
+        },
         images: {
+          select: { id: true, url: true, position: true },
           orderBy: { position: 'asc' },
+          take: 1,
         },
         translations: {
+          select: { id: true, locale: true, name: true, slug: true },
           where: { locale: 'en' },
           take: 1,
         },
       },
     });
+
+    await this.cache.set(cacheKey, data, this.CACHE_TTL);
+    return data;
   }
 
   async findOne(id: number) {
+    const cacheKey = `products:${id}`;
+    
+    // Try cache first
+    const cached = await this.cache.get(cacheKey);
+    if (cached) {
+      this.logger.debug(`Cache hit for ${cacheKey}`);
+      return cached;
+    }
+
     const product = await this.db.product.findUnique({
       where: { id },
-      include: {
-        brand: true,
-        categories: true,
-        tags: true,
+      select: {
+        id: true,
+        sku: true,
+        brandId: true,
+        createdAt: true,
+        updatedAt: true,
+        brand: {
+          select: { id: true, name: true, slug: true }
+        },
+        categories: {
+          select: { id: true, name: true }
+        },
+        tags: {
+          select: { id: true, name: true }
+        },
         images: {
+          select: { id: true, url: true, position: true },
           orderBy: { position: 'asc' },
         },
-        translations: true,
+        translations: {
+          select: { id: true, locale: true, name: true, slug: true, description: true }
+        },
       },
     });
 
     if (!product) throw new NotFoundException('Product not found');
+    
+    // Cache the result
+    await this.cache.set(cacheKey, product, this.CACHE_TTL);
+    
     return product;
   }
 
   async update(id: number, dto: UpdateProductDto) {
-    // Debug: Log received DTO
-    console.log('Update DTO received:', JSON.stringify(dto, null, 2));
-    
     const existing = await this.db.product.findUnique({
       where: { id },
-      include: { categories: true, tags: true },
+      select: { 
+        id: true, 
+        categories: { select: { id: true } }, 
+        tags: { select: { id: true } } 
+      },
     });
 
     if (!existing) throw new NotFoundException('Product not found');
 
-    // Validate brand if provided
-    if (dto.brandId !== undefined) {
-      const brand = await this.db.brand.findUnique({ where: { id: dto.brandId } });
-      if (!brand) throw new NotFoundException('Brand not found');
-    }
+    // Validate brand, category, and tags in parallel (only if provided)
+    const validations = await Promise.all([
+      dto.brandId !== undefined 
+        ? this.db.brand.findUnique({ 
+            where: { id: dto.brandId },
+            select: { id: true }
+          })
+        : Promise.resolve(true),
+      dto.categoryId !== undefined
+        ? this.db.category.findFirst({
+            where: { id: dto.categoryId, type: 'PRODUCT' },
+            select: { id: true }
+          })
+        : Promise.resolve(true),
+      dto.tagIds !== undefined && dto.tagIds.length > 0
+        ? this.db.tag.findMany({
+            where: { id: { in: dto.tagIds }, type: 'PRODUCT' },
+            select: { id: true }
+          })
+        : Promise.resolve([]),
+    ]);
 
-    // Validate category if provided
-    if (dto.categoryId !== undefined) {
-      const category = await this.db.category.findFirst({
-        where: { id: dto.categoryId, type: 'PRODUCT' },
-      });
-      if (!category) throw new NotFoundException('Product category not found');
-    }
+    const [brand, category, tags] = validations;
 
-    // Validate tags if provided (allow empty array to clear tags)
-    if (dto.tagIds !== undefined && dto.tagIds.length > 0) {
-      const tags = await this.db.tag.findMany({
-        where: { id: { in: dto.tagIds }, type: 'PRODUCT' },
-      });
-      if (tags.length !== dto.tagIds.length) {
-        throw new NotFoundException('One or more tags not found');
-      }
+    if (dto.brandId !== undefined && !brand) throw new NotFoundException('Brand not found');
+    if (dto.categoryId !== undefined && !category) throw new NotFoundException('Product category not found');
+    if (dto.tagIds !== undefined && dto.tagIds.length > 0 && Array.isArray(tags) && tags.length !== dto.tagIds.length) {
+      throw new NotFoundException('One or more tags not found');
     }
 
     const updateData: any = {};
@@ -241,13 +363,11 @@ export class ProductsService {
 
       // Only update if we have data to update
       if (Object.keys(translationData).length > 0) {
-        console.log('Updating translation with data:', translationData);
         if (existingTranslation) {
-          const updated = await this.db.productTranslation.update({
+          await this.db.productTranslation.update({
             where: { id: existingTranslation.id },
             data: translationData,
           });
-          console.log('Translation updated:', updated);
         } else {
           // If no translation exists, create one
           await this.db.productTranslation.create({
@@ -279,6 +399,13 @@ export class ProductsService {
       });
     }
 
+    // Invalidate cache
+    await Promise.all([
+      this.cache.del(`products:${id}`),
+      this.cache.delPattern('products:paginated:*'),
+      this.cache.del('products:all'),
+    ]);
+
     return this.findOne(id);
   }
 
@@ -302,7 +429,16 @@ export class ProductsService {
     });
 
     // Delete the product (many-to-many relations will be handled automatically)
-    return this.db.product.delete({ where: { id } });
+    const result = await this.db.product.delete({ where: { id } });
+
+    // Invalidate cache
+    await Promise.all([
+      this.cache.del(`products:${id}`),
+      this.cache.delPattern('products:paginated:*'),
+      this.cache.del('products:all'),
+    ]);
+
+    return result;
   }
 
   private generateSKU(name: string): string {

@@ -1,16 +1,28 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { CreateBrandDto } from './dto/create-brand.dto';
 import { UpdateBrandDto } from './dto/update-brand.dto';
 import { PaginationDto } from './dto/pagination.dto';
+import { CacheService } from '../common/cache/cache.service';
 
 @Injectable()
 export class BrandService {
-  constructor(private readonly db: DatabaseService) {}
+  private readonly logger = new Logger(BrandService.name);
+  private readonly CACHE_TTL = 600; // 10 minutes (brands change less frequently)
+
+  constructor(
+    private readonly db: DatabaseService,
+    private readonly cache: CacheService,
+  ) {}
 
   async create(dto: CreateBrandDto) {
     const slug = this.slugify(dto.name);
-    return this.db.brand.create({ data: { name: dto.name, slug } });
+    const brand = await this.db.brand.create({ data: { name: dto.name, slug } });
+    
+    // Invalidate cache
+    await this.cache.delPattern('brands:*');
+    
+    return brand;
   }
 
   async findAll(paginationDto?: PaginationDto) {
@@ -20,18 +32,26 @@ export class BrandService {
       const limit = paginationDto.limit ?? 10;
       const skip = (page - 1) * limit;
 
+      const cacheKey = `brands:paginated:${page}:${limit}`;
+      const cached = await this.cache.get(cacheKey);
+      if (cached) {
+        this.logger.debug(`Cache hit for ${cacheKey}`);
+        return cached;
+      }
+
       const [data, total] = await Promise.all([
         this.db.brand.findMany({
           skip,
           take: limit,
           orderBy: { id: 'desc' },
+          select: { id: true, name: true, slug: true },
         }),
         this.db.brand.count(),
       ]);
 
       const totalPages = Math.ceil(total / limit);
 
-      return {
+      const result = {
         data,
         meta: {
           page,
@@ -42,20 +62,51 @@ export class BrandService {
           hasPreviousPage: page > 1,
         },
       };
+
+      await this.cache.set(cacheKey, result, this.CACHE_TTL);
+      return result;
     }
 
     // Return all results if no pagination
-    return this.db.brand.findMany({ orderBy: { id: 'desc' } });
+    const cacheKey = 'brands:all';
+    const cached = await this.cache.get(cacheKey);
+    if (cached) {
+      this.logger.debug(`Cache hit for ${cacheKey}`);
+      return cached;
+    }
+
+    const data = await this.db.brand.findMany({ 
+      orderBy: { id: 'desc' },
+      select: { id: true, name: true, slug: true },
+    });
+
+    await this.cache.set(cacheKey, data, this.CACHE_TTL);
+    return data;
   }
 
   async findOne(id: number) {
-    const brand = await this.db.brand.findUnique({ where: { id } });
+    const cacheKey = `brands:${id}`;
+    const cached = await this.cache.get(cacheKey);
+    if (cached) {
+      this.logger.debug(`Cache hit for ${cacheKey}`);
+      return cached;
+    }
+
+    const brand = await this.db.brand.findUnique({ 
+      where: { id },
+      select: { id: true, name: true, slug: true },
+    });
     if (!brand) throw new NotFoundException('Brand not found');
+    
+    await this.cache.set(cacheKey, brand, this.CACHE_TTL);
     return brand;
   }
 
   async update(id: number, dto: UpdateBrandDto) {
-    const existing = await this.db.brand.findUnique({ where: { id } });
+    const existing = await this.db.brand.findUnique({ 
+      where: { id },
+      select: { id: true }
+    });
     if (!existing) throw new NotFoundException('Brand not found');
 
     const data: { name?: string; slug?: string } = {};
@@ -64,14 +115,34 @@ export class BrandService {
       data.slug = this.slugify(dto.name);
     }
 
-    if (Object.keys(data).length === 0) return existing;
-    return this.db.brand.update({ where: { id }, data });
+    if (Object.keys(data).length === 0) return this.findOne(id);
+    
+    const updated = await this.db.brand.update({ where: { id }, data });
+    
+    // Invalidate cache
+    await Promise.all([
+      this.cache.del(`brands:${id}`),
+      this.cache.delPattern('brands:paginated:*'),
+      this.cache.del('brands:all'),
+    ]);
+    
+    return updated;
   }
 
   async remove(id: number) {
     const existing = await this.db.brand.findUnique({ where: { id }, select: { id: true } });
     if (!existing) throw new NotFoundException('Brand not found');
-    return this.db.brand.delete({ where: { id } });
+    
+    const result = await this.db.brand.delete({ where: { id } });
+    
+    // Invalidate cache
+    await Promise.all([
+      this.cache.del(`brands:${id}`),
+      this.cache.delPattern('brands:paginated:*'),
+      this.cache.del('brands:all'),
+    ]);
+    
+    return result;
   }
 
   private slugify(text: string): string {

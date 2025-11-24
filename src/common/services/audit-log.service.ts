@@ -164,6 +164,37 @@ export class AuditLogService {
   }
 
   /**
+   * Log authentication event asynchronously (non-blocking)
+   * Use this for login flows to prevent blocking the response
+   */
+  logAuthAsync(
+    action: AuditAction,
+    userId: number | null,
+    success: boolean,
+    details: {
+      ipAddress?: string;
+      userAgent?: string;
+      errorMessage?: string;
+      additionalInfo?: any;
+    }
+  ): void {
+    // Fire and forget - don't await to avoid blocking the response
+    this.log({
+      userId: userId || undefined,
+      action,
+      resource: 'Authentication',
+      details: details.additionalInfo,
+      ipAddress: details.ipAddress,
+      userAgent: details.userAgent,
+      status: success ? 'SUCCESS' : 'FAILURE',
+      errorMessage: details.errorMessage,
+    }).catch((error) => {
+      // Log error but don't throw - this is fire and forget
+      this.logger.error(`Failed to create async audit log: ${error.message}`, error.stack);
+    });
+  }
+
+  /**
    * Log user management event
    */
   async logUserManagement(

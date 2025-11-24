@@ -103,6 +103,9 @@ model Brand {
   slug         String         @unique
   products     Product[]
   youtubeVideos YouTubeVideo[]
+
+  @@index([slug])
+  @@index([name])
 }
 
 model Product {
@@ -119,6 +122,8 @@ model Product {
   videos       Video[]              @relation("ProductVideos")
 
   @@index([brandId])
+  @@index([sku])
+  @@index([createdAt])
 }
 
 model Category {
@@ -128,6 +133,9 @@ model Category {
   videos        Video[]
   products      Product[]      @relation("ProductCategories")
   youtubeVideos YouTubeVideo[] @relation("YouTubeVideoCategories")
+
+  @@index([type])
+  @@index([name])
 }
 
 model ProductTranslation {
@@ -147,6 +155,8 @@ model ProductTranslation {
 
   @@unique([productId, locale])
   @@unique([slug, locale])
+  @@index([productId])
+  @@index([locale])
 }
 
 model ProductImage {
@@ -158,6 +168,9 @@ model ProductImage {
   height    Int?
   position  Int?
   product   Product @relation(fields: [productId], references: [id])
+
+  @@index([productId])
+  @@index([position])
 }
 
 model Testimonial {
@@ -168,6 +181,8 @@ model Testimonial {
   imageUrl    String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  @@index([createdAt])
 }
 
 model YouTubeVideo {
@@ -226,6 +241,9 @@ model ContactSubmission {
   message      String
   customFields String?   @db.Text
   createdAt    DateTime  @default(now())
+
+  @@index([createdAt])
+  @@index([email])
 }
 
 model User {
@@ -247,6 +265,10 @@ model User {
   sessions          Session[]
   passwordHistory   PasswordHistory[]
   role              Role      @relation(fields: [roleId], references: [id])
+
+  @@index([roleId])
+  @@index([status])
+  @@index([email])
 }
 
 model Otp {

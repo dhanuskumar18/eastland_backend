@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { HttpCacheInterceptor } from './common/interceptors/http-cache.interceptor';
 import { AppController } from './app.controller';
 import { AuthModule } from './auth/auth.module';
 import { SessionModule } from './session/session.module';
@@ -98,6 +100,11 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
     {
       provide: APP_GUARD,
       useClass: UserStatusGuard,
+    },
+    // PERFORMANCE: HTTP caching interceptor for GET requests
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: HttpCacheInterceptor,
     },
   ],
 })

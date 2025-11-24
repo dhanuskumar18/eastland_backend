@@ -1,11 +1,18 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { CreateContactSubmissionDto } from './dto/create-contact-submission.dto';
 import { PaginationDto } from '../testimonials/dto/pagination.dto';
+import { CacheService } from '../common/cache/cache.service';
 
 @Injectable()
 export class ContactSubmissionsService {
-  constructor(private readonly db: DatabaseService) {}
+  private readonly logger = new Logger(ContactSubmissionsService.name);
+  private readonly CACHE_TTL = 180; // 3 minutes (contact submissions change frequently)
+
+  constructor(
+    private readonly db: DatabaseService,
+    private readonly cache: CacheService,
+  ) {}
 
   async create(dto: CreateContactSubmissionDto) {
     const submission = await this.db.contactSubmission.create({
@@ -18,6 +25,9 @@ export class ContactSubmissionsService {
         customFields: dto.customFields ? JSON.stringify(dto.customFields) : null,
       },
     });
+
+    // Invalidate cache
+    await this.cache.delPattern('contact-submissions:*');
 
     return {
       status: true,
@@ -43,11 +53,28 @@ export class ContactSubmissionsService {
       const limit = paginationDto.limit ?? 10;
       const skip = (page - 1) * limit;
 
+      const cacheKey = `contact-submissions:paginated:${page}:${limit}`;
+      const cached = await this.cache.get(cacheKey);
+      if (cached) {
+        this.logger.debug(`Cache hit for ${cacheKey}`);
+        return cached;
+      }
+
       const [data, total] = await Promise.all([
         this.db.contactSubmission.findMany({
           skip,
           take: limit,
           orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+            subject: true,
+            message: true,
+            customFields: true,
+            createdAt: true,
+          },
         }),
         this.db.contactSubmission.count(),
       ]);
@@ -60,7 +87,7 @@ export class ContactSubmissionsService {
 
       const totalPages = Math.ceil(total / limit);
 
-      return {
+      const result = {
         status: true,
         code: 200,
         data: parsedData,
@@ -73,11 +100,31 @@ export class ContactSubmissionsService {
           hasPreviousPage: page > 1,
         },
       };
+
+      await this.cache.set(cacheKey, result, this.CACHE_TTL);
+      return result;
     }
 
     // Return all results if no pagination
+    const cacheKey = 'contact-submissions:all';
+    const cached = await this.cache.get(cacheKey);
+    if (cached) {
+      this.logger.debug(`Cache hit for ${cacheKey}`);
+      return cached;
+    }
+
     const data = await this.db.contactSubmission.findMany({ 
-      orderBy: { createdAt: 'desc' } 
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        subject: true,
+        message: true,
+        customFields: true,
+        createdAt: true,
+      },
     });
     
     // Parse customFields for each submission
@@ -86,11 +133,14 @@ export class ContactSubmissionsService {
       customFields: this.parseCustomFields(item.customFields),
     }));
 
-    return {
+    const result = {
       status: true,
       code: 200,
       data: parsedData,
     };
+
+    await this.cache.set(cacheKey, result, this.CACHE_TTL);
+    return result;
   }
 
   async findOne(id: number) {
@@ -121,6 +171,9 @@ export class ContactSubmissionsService {
     }
 
     await this.db.contactSubmission.delete({ where: { id } });
+
+    // Invalidate cache
+    await this.cache.delPattern('contact-submissions:*');
 
     return {
       status: true,

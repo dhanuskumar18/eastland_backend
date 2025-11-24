@@ -4,9 +4,13 @@ import { ValidationPipe } from '@nestjs/common';
 import cookieParser from 'cookie-parser';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
+// @ts-ignore - compression is a CommonJS module
+const compression = require('compression');
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    logger: process.env.NODE_ENV === 'production' ? ['error', 'warn'] : ['log', 'error', 'warn', 'debug'],
+  });
   
   // Note: Global prefix removed to maintain backward compatibility
   // SEO routes use 'api/seo' prefix in controller
@@ -52,6 +56,21 @@ async function bootstrap() {
   });
 
   app.use(cookieParser());
+  
+  // Enable compression for all responses (gzip/deflate)
+  // This significantly reduces response size and improves performance
+  app.use(compression({
+    threshold: 1024, // Only compress responses larger than 1KB
+    level: 6, // Compression level (0-9, 6 is a good balance)
+    filter: (req, res) => {
+      // Don't compress if the client doesn't support it
+      if (req.headers['x-no-compression']) {
+        return false;
+      }
+      // Compress all other responses
+      return true;
+    },
+  }));
   
   // ACCESS CONTROL CHECKLIST ITEM #7: Directory Browsing Protection
   // Serve static files from uploads directory with directory browsing disabled

@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -8,6 +8,7 @@ import * as argon from '@node-rs/argon2';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import { UserStatus } from '@prisma/client';
 import { AuditLogService, AuditAction } from '../common/services/audit-log.service';
+import { CacheService } from '../common/cache/cache.service';
 
 /**
  * ERROR HANDLING & LOGGING CHECKLIST ITEM #1:
@@ -15,9 +16,13 @@ import { AuditLogService, AuditAction } from '../common/services/audit-log.servi
  */
 @Injectable()
 export class UserService {
+  private readonly logger = new Logger(UserService.name);
+  private readonly CACHE_TTL = 300; // 5 minutes
+
   constructor(
     private readonly db: DatabaseService,
     private readonly auditLog: AuditLogService,
+    private readonly cache: CacheService,
   ) {}
 
   async create(dto: CreateUserDto, performedBy?: number, ipAddress?: string, userAgent?: string) {
@@ -59,6 +64,9 @@ export class UserService {
         },
       });
 
+      // Invalidate cache
+      await this.cache.delPattern('users:*');
+
       // AUDIT LOG: User created
       await this.auditLog.logSuccess({
         userId: performedBy,
@@ -96,6 +104,13 @@ export class UserService {
       const limit = paginationDto.limit ?? 10;
       const skip = (page - 1) * limit;
 
+      const cacheKey = `users:paginated:${page}:${limit}`;
+      const cached = await this.cache.get(cacheKey);
+      if (cached) {
+        this.logger.debug(`Cache hit for ${cacheKey}`);
+        return cached;
+      }
+
       const [data, total] = await Promise.all([
         this.db.user.findMany({
           skip,
@@ -120,7 +135,7 @@ export class UserService {
 
       const totalPages = Math.ceil(total / limit);
 
-      return {
+      const result = {
         data,
         meta: {
           page,
@@ -131,10 +146,20 @@ export class UserService {
           hasPreviousPage: page > 1,
         },
       };
+
+      await this.cache.set(cacheKey, result, this.CACHE_TTL);
+      return result;
     }
 
     // Return all results if no pagination
-    return this.db.user.findMany({
+    const cacheKey = 'users:all';
+    const cached = await this.cache.get(cacheKey);
+    if (cached) {
+      this.logger.debug(`Cache hit for ${cacheKey}`);
+      return cached;
+    }
+
+    const data = await this.db.user.findMany({
       orderBy: { id: 'desc' },
       select: {
         id: true,
@@ -150,6 +175,9 @@ export class UserService {
         updatedAt: true,
       },
     });
+
+    await this.cache.set(cacheKey, data, this.CACHE_TTL);
+    return data;
   }
 
   async findOne(id: number) {
@@ -247,6 +275,13 @@ export class UserService {
         },
       });
 
+      // Invalidate cache
+      await Promise.all([
+        this.cache.del(`users:${id}`),
+        this.cache.delPattern('users:paginated:*'),
+        this.cache.del('users:all'),
+      ]);
+
       // AUDIT LOG: User updated
       await this.auditLog.logSuccess({
         userId: performedBy,
@@ -315,6 +350,13 @@ export class UserService {
       },
     });
 
+    // Invalidate cache
+    await Promise.all([
+      this.cache.del(`users:${id}`),
+      this.cache.delPattern('users:paginated:*'),
+      this.cache.del('users:all'),
+    ]);
+
     // AUDIT LOG: User status changed
     await this.auditLog.logSuccess({
       userId: performedBy,
@@ -352,6 +394,13 @@ export class UserService {
     if (!existing) throw new NotFoundException('User not found');
 
     const result = await this.db.user.delete({ where: { id } });
+
+    // Invalidate cache
+    await Promise.all([
+      this.cache.del(`users:${id}`),
+      this.cache.delPattern('users:paginated:*'),
+      this.cache.del('users:all'),
+    ]);
 
     // AUDIT LOG: User deleted
     await this.auditLog.logSuccess({

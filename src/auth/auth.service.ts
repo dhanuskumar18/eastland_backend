@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { AuthDto, SignupDto, TokenResponseDto, ForgotPasswordDto, ResetPasswordDto, VerifyOtpDto, ChangePasswordDto, UpdateProfileDto } from './dto';
 import * as argon from '@node-rs/argon2';
 import { DatabaseService } from 'src/database/database.service';
@@ -20,6 +20,8 @@ import * as crypto from 'crypto';
  */
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private prisma: DatabaseService,
     private jwt: JwtService,
@@ -82,16 +84,8 @@ export class AuthService {
       });
     }
 
-    // If lock period has expired, reset the lock
-    if (user.lockedUntil && user.lockedUntil <= new Date()) {
-      await this.prisma.user.update({
-        where: { id: user.id },
-        data: {
-          failedLoginAttempts: 0,
-          lockedUntil: null,
-        },
-      });
-    }
+    // If lock period has expired, reset the lock (non-blocking - will be handled after password check)
+    const needsLockReset = user.lockedUntil && user.lockedUntil <= new Date();
 
     // Check if user status is ACTIVE
     if (user.status === 'INACTIVE') {
@@ -107,13 +101,19 @@ export class AuthService {
     
     if (!pwMatches) {
       // Increment failed login attempts
-      const newFailedAttempts = (user.failedLoginAttempts || 0) + 1;
+      // If lock expired, reset it and start fresh with failed attempts
+      const newFailedAttempts = needsLockReset ? 1 : (user.failedLoginAttempts || 0) + 1;
       const MAX_FAILED_ATTEMPTS = 5;
       const LOCKOUT_DURATION_MINUTES = 30; // Lock for 30 minutes
 
       let updateData: any = {
         failedLoginAttempts: newFailedAttempts,
       };
+      
+      // Reset expired lock
+      if (needsLockReset) {
+        updateData.lockedUntil = null;
+      }
 
       // Lock account if max attempts reached
       if (newFailedAttempts >= MAX_FAILED_ATTEMPTS) {
@@ -176,27 +176,32 @@ export class AuthService {
       });
     }
 
-    // Password is correct - reset failed attempts and lock status
-    if (user.failedLoginAttempts > 0 || user.lockedUntil) {
-      await this.prisma.user.update({
-        where: { id: user.id },
-        data: {
-          failedLoginAttempts: 0,
-          lockedUntil: null,
-        },
-      });
+    // Password is correct - batch all user updates together for better performance
+    const userUpdates: any = {};
+    const needsUpdate = needsLockReset || user.failedLoginAttempts > 0 || user.lockedUntil || !user.passwordChangedAt;
+    
+    if (needsLockReset || user.failedLoginAttempts > 0 || user.lockedUntil) {
+      userUpdates.failedLoginAttempts = 0;
+      userUpdates.lockedUntil = null;
     }
-
+    
     // Check password expiry (90 days) - only if passwordChangedAt is set
     // If passwordChangedAt is null, set it to current date (for existing users) and allow login
     if (!user.passwordChangedAt) {
-      // Set passwordChangedAt for existing users who haven't changed password yet
-      await this.prisma.user.update({
-        where: { id: user.id },
-        data: { passwordChangedAt: new Date() },
-      });
+      userUpdates.passwordChangedAt = new Date();
       // Update user object for subsequent checks
       user.passwordChangedAt = new Date();
+    }
+    
+    // Batch update if needed (non-blocking for successful login)
+    if (needsUpdate && Object.keys(userUpdates).length > 0) {
+      // Don't await - let it run in background for successful logins
+      this.prisma.user.update({
+        where: { id: user.id },
+        data: userUpdates,
+      }).catch((error) => {
+        this.logger.error(`Failed to update user after login: ${error.message}`, error.stack);
+      });
     }
 
     const passwordExpiry = this.checkPasswordExpiry(user.passwordChangedAt);
@@ -207,13 +212,12 @@ export class AuthService {
         daysExpired: passwordExpiry.daysSinceChange - 90,
       });
     } else if (passwordExpiry.daysRemaining <= 7 && passwordExpiry.daysRemaining > 0) {
-      // Send warning email if password expires in 7 days or less
-      try {
-        await this.emailService.sendPasswordExpiryWarning(user.email, passwordExpiry.daysRemaining);
-      } catch (error) {
-        // Don't fail login if email fails
-        console.error('Failed to send password expiry warning:', error);
-      }
+      // Send warning email if password expires in 7 days or less (non-blocking)
+      this.emailService.sendPasswordExpiryWarning(user.email, passwordExpiry.daysRemaining)
+        .catch((error) => {
+          // Don't fail login if email fails
+          this.logger.error('Failed to send password expiry warning:', error);
+        });
     }
 
     // ACCESS CONTROL CHECKLIST ITEM #6: MFA Enforcement
@@ -243,8 +247,8 @@ export class AuthService {
     }
 
     // MFA not enabled, proceed with normal login
-    // AUDIT LOG: Successful login
-    await this.auditLog.logAuth(
+    // AUDIT LOG: Successful login (non-blocking to improve response time)
+    this.auditLog.logAuthAsync(
       AuditAction.LOGIN_SUCCESS,
       user.id,
       true,
