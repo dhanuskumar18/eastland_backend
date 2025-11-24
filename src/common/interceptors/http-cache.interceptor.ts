@@ -5,7 +5,8 @@ import {
   CallHandler,
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
-import { tap } from 'rxjs/operators';
+import { tap, catchError } from 'rxjs/operators';
+import { throwError } from 'rxjs';
 import type { Response } from 'express';
 
 /**
@@ -22,27 +23,41 @@ export class HttpCacheInterceptor implements NestInterceptor {
 
     return next.handle().pipe(
       tap(() => {
-        // Check if response has already been sent (prevents "headers already sent" error)
+        // Check if response headers have already been sent (e.g., by exception filter)
         if (response.headersSent) {
           return;
         }
-        
+
         // Only cache GET requests
         if (request.method === 'GET') {
-          // Set cache-control headers
-          // Cache for 5 minutes, allow stale content for 1 hour while revalidating
-          response.setHeader(
-            'Cache-Control',
-            'public, max-age=300, stale-while-revalidate=3600',
-          );
-          
-          // Add ETag based on response body (handled by NestJS automatically if enabled)
-          // Enable ETag generation
-          response.setHeader('ETag', 'W/"' + Date.now() + '"');
+          try {
+            // Set cache-control headers
+            // Cache for 5 minutes, allow stale content for 1 hour while revalidating
+            response.setHeader(
+              'Cache-Control',
+              'public, max-age=300, stale-while-revalidate=3600',
+            );
+            
+            // Add ETag based on response body (handled by NestJS automatically if enabled)
+            // Enable ETag generation
+            response.setHeader('ETag', 'W/"' + Date.now() + '"');
+          } catch (error) {
+            // Silently ignore if headers can't be set (response already sent)
+            // This prevents "Cannot set headers after they are sent" errors
+          }
         } else {
-          // Don't cache mutations
-          response.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+          try {
+            // Don't cache mutations
+            response.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+          } catch (error) {
+            // Silently ignore if headers can't be set (response already sent)
+          }
         }
+      }),
+      catchError((error) => {
+        // Re-throw the error to let exception filters handle it
+        // Don't try to set headers on error responses
+        return throwError(() => error);
       }),
     );
   }

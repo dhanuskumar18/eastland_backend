@@ -5,7 +5,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { ToggleStatusDto } from './dto/toggle-status.dto';
 import { PaginationDto } from '../brand/dto/pagination.dto';
 import * as argon from '@node-rs/argon2';
-import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
+import { PrismaClientKnownRequestError } from '@prisma/client/runtime/client';
 import { UserStatus } from '@prisma/client';
 import { AuditLogService, AuditAction } from '../common/services/audit-log.service';
 import { CacheService } from '../common/cache/cache.service';

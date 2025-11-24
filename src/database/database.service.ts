@@ -1,23 +1,34 @@
 import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
+import { Pool } from 'pg';
+import { PrismaPg } from '@prisma/adapter-pg';
 
 
 @Injectable()
 export class DatabaseService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
     constructor(config: ConfigService){
         const isProduction = config.get('NODE_ENV') === 'production';
+        const databaseUrl = config.get<string>('DATABASE_URL');
+        
+        if (!databaseUrl) {
+            throw new Error('DATABASE_URL environment variable is required');
+        }
+        
+        // Prisma 7 configuration - using adapter for direct database connection
+        // Create PostgreSQL connection pool with optimized settings
+        const pool = new Pool({
+            connectionString: databaseUrl,
+            max: 20, // Maximum number of clients in the pool
+            idleTimeoutMillis: 30000, // Close idle clients after 30 seconds
+            connectionTimeoutMillis: 2000, // Return an error after 2 seconds if connection could not be established
+        });
+        
+        // Create Prisma adapter with the connection pool
+        const adapter = new PrismaPg(pool);
         
         super({
-            datasources:{
-                db:{
-                    // Security: Database URL stored in environment variable (DATABASE_URL)
-                    // Never hardcoded in source code - ensures credentials are not committed to version control
-                    // Note: Connection pooling is configured via connection_limit and pool_timeout in DATABASE_URL
-                    // Example: postgresql://user:pass@host:5432/db?connection_limit=20&pool_timeout=20
-                    url:config.get('DATABASE_URL')
-                }
-            },
+            adapter: adapter,
             // Optimize logging: only log errors in production, reduced logging in dev
             log: isProduction 
                 ? ['error'] 

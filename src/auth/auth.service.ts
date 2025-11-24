@@ -2,7 +2,7 @@ import { ForbiddenException, Injectable, NotFoundException, BadRequestException,
 import { AuthDto, SignupDto, TokenResponseDto, ForgotPasswordDto, ResetPasswordDto, VerifyOtpDto, ChangePasswordDto, UpdateProfileDto } from './dto';
 import * as argon from '@node-rs/argon2';
 import { DatabaseService } from 'src/database/database.service';
-import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
+import { PrismaClientKnownRequestError } from '@prisma/client/runtime/client';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { EmailService } from '../email/email.service';
