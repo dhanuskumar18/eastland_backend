@@ -11,6 +11,7 @@ import { DeviceDetectionService } from '../session/device-detection.service';
 import { MfaService } from './mfa.service';
 import { PasswordValidator } from './utils/password-validator';
 import { AuditLogService, AuditAction } from '../common/services/audit-log.service';
+import { CaptchaService } from '../common/services/captcha.service';
 import type { Response, Request } from 'express';
 import * as crypto from 'crypto';
 
@@ -31,6 +32,7 @@ export class AuthService {
     private deviceDetection: DeviceDetectionService,
     private mfaService: MfaService,
     private auditLog: AuditLogService,
+    private captchaService: CaptchaService,
   ) {}
   async signin(dto: AuthDto, res: Response, req: Request) {
     console.log('\n\n╔═══════════════════════════════════════════════════════════╗');
@@ -38,6 +40,30 @@ export class AuthService {
     console.log('╚═══════════════════════════════════════════════════════════╝');
     console.log(`📧 Email: ${dto.email}`);
     console.log(`⏰ Time: ${new Date().toISOString()}\n`);
+    
+    // CAPTCHA validation for bot detection
+    if (dto.captchaToken) {
+      const captchaValid = await this.captchaService.verifyToken(
+        dto.captchaToken,
+        req.ip
+      );
+      if (!captchaValid) {
+        this.logger.warn(`CAPTCHA validation failed for login attempt: ${dto.email}`);
+        await this.auditLog.logAuth(
+          AuditAction.LOGIN_FAILURE,
+          null,
+          false,
+          {
+            ipAddress: req.ip,
+            userAgent: req.get('user-agent'),
+            errorMessage: 'CAPTCHA validation failed',
+            additionalInfo: { email: dto.email },
+          }
+        );
+        throw new ForbiddenException('CAPTCHA verification failed. Please try again.');
+      }
+    }
+    
     const startTime = Date.now();
     // Keep JOIN - it's usually faster than separate queries
     const user = await this.prisma.user.findUnique({
@@ -417,6 +443,18 @@ export class AuthService {
 
   async signup(dto: SignupDto, res: Response, req: Request) {
     try {
+      // CAPTCHA validation for bot detection
+      if (dto.captchaToken) {
+        const captchaValid = await this.captchaService.verifyToken(
+          dto.captchaToken,
+          req.ip
+        );
+        if (!captchaValid) {
+          this.logger.warn(`CAPTCHA validation failed for signup attempt: ${dto.email}`);
+          throw new ForbiddenException('CAPTCHA verification failed. Please try again.');
+        }
+      }
+      
       // Validate password
       const passwordValidation = PasswordValidator.validate(dto.password);
       if (!passwordValidation.isValid) {
@@ -561,7 +599,19 @@ export class AuthService {
   }
 
 
-  async forgotPassword(dto: ForgotPasswordDto): Promise<{ message: string }> {
+  async forgotPassword(dto: ForgotPasswordDto, req?: Request): Promise<{ message: string }> {
+    // CAPTCHA validation for bot detection
+    if (dto.captchaToken) {
+      const captchaValid = await this.captchaService.verifyToken(
+        dto.captchaToken,
+        req?.ip
+      );
+      if (!captchaValid) {
+        this.logger.warn(`CAPTCHA validation failed for forgot password attempt: ${dto.email}`);
+        throw new ForbiddenException('CAPTCHA verification failed. Please try again.');
+      }
+    }
+    
     // Check if user exists
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email },

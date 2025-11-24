@@ -239,9 +239,11 @@ export class SeoService {
 
     // Use transaction for atomicity
     await this.prisma.$transaction(async (tx) => {
+      const txClient = tx as any; // Type assertion for Prisma 7 transaction client
+      
       for (const section of dto.sections) {
         // Validate section exists
-        const sectionExists = await tx.section.findUnique({
+        const sectionExists = await txClient.section.findUnique({
           where: { id: section.sectionId },
         });
 
@@ -252,7 +254,7 @@ export class SeoService {
         }
 
         // Upsert section config
-        const result = await tx.seoSectionLazyLoading.upsert({
+        const result = await txClient.seoSectionLazyLoading.upsert({
           where: { sectionId: section.sectionId },
           update: {
             enabled: section.enabled,

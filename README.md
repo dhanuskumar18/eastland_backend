@@ -49,6 +49,11 @@ MAIL_PORT=587
 MAIL_USER="your-email@gmail.com"
 MAIL_PASS="your-app-password"
 MAIL_FROM="noreply@yourdomain.com"
+
+# Google reCAPTCHA v2 (Bot Detection - Checkbox)
+# Get your keys from: https://www.google.com/recaptcha/admin
+# Select "reCAPTCHA v2" -> "I'm not a robot" Checkbox
+RECAPTCHA_SECRET_KEY="your_recaptcha_secret_key"
 ```
 
 **Note for Gmail users:**

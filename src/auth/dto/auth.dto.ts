@@ -11,6 +11,10 @@ export class AuthDto {
     @MinLength(12, { message: 'Password must be at least 12 characters long' })
     @MaxLength(128, { message: 'Password must not exceed 128 characters' })
     password: string;
+
+    @IsOptional()
+    @IsString()
+    captchaToken?: string; // reCAPTCHA token for bot detection
 }
 
 export class SignupDto extends AuthDto {
@@ -40,6 +44,10 @@ export class ForgotPasswordDto {
     @IsNotEmpty()
     @IsString()
     email: string;
+
+    @IsOptional()
+    @IsString()
+    captchaToken?: string; // reCAPTCHA token for bot detection
 }
 
 export class VerifyOtpDto {

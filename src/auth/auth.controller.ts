@@ -171,8 +171,8 @@ export class AuthController {
   @SkipCsrf() // Skip CSRF for forgot password (user not authenticated)
   @Throttle({ 'password-reset': { limit: 5, ttl: 300000 } }) // 5 attempts per 5 minutes for forgot password
   @Post("forgot-password")
-  forgotPassword(@Body() dto: ForgotPasswordDto) {
-    return this.authService.forgotPassword(dto);
+  forgotPassword(@Body() dto: ForgotPasswordDto, @Req() req: Request) {
+    return this.authService.forgotPassword(dto, req);
   }
 
   @SkipCsrf() // Skip CSRF for OTP verification (user not authenticated)
