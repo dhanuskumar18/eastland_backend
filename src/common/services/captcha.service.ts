@@ -68,7 +68,12 @@ export class CaptchaService {
         })
       );
 
-      const data = response.data;
+      const data = response.data as {
+        success: boolean;
+        challenge_ts?: string;
+        hostname?: string;
+        'error-codes'?: string[];
+      };
 
       if (!data.success) {
         this.logger.warn(`CAPTCHA verification failed: ${JSON.stringify(data['error-codes'] || [])}`);
@@ -135,7 +140,12 @@ export class CaptchaService {
         })
       );
 
-      const data = response.data;
+      const data = response.data as {
+        success: boolean;
+        challenge_ts?: string;
+        hostname?: string;
+        'error-codes'?: string[];
+      };
       
       return {
         success: data.success,
