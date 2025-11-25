@@ -269,7 +269,7 @@ export class AuditLogService {
     return {
       data: logs,
       meta: {
-        total,
+        total,  
         limit,
         offset,
         hasMore: offset + limit < total,
