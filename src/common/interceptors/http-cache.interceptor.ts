@@ -31,16 +31,27 @@ export class HttpCacheInterceptor implements NestInterceptor {
         // Only cache GET requests
         if (request.method === 'GET') {
           try {
-            // Set cache-control headers
-            // Cache for 5 minutes, allow stale content for 1 hour while revalidating
-            response.setHeader(
-              'Cache-Control',
-              'public, max-age=300, stale-while-revalidate=3600',
-            );
+            // Don't cache pages and sections endpoints - they change frequently
+            const path = request.url?.split('?')[0] || '';
+            const isPagesEndpoint = path.startsWith('/pages') || path.startsWith('/sections');
             
-            // Add ETag based on response body (handled by NestJS automatically if enabled)
-            // Enable ETag generation
-            response.setHeader('ETag', 'W/"' + Date.now() + '"');
+            if (isPagesEndpoint) {
+              // No caching for pages/sections - data changes frequently
+              response.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+              response.setHeader('Pragma', 'no-cache');
+              response.setHeader('Expires', '0');
+            } else {
+              // Set cache-control headers for other GET requests
+              // Cache for 5 minutes, allow stale content for 1 hour while revalidating
+              response.setHeader(
+                'Cache-Control',
+                'public, max-age=300, stale-while-revalidate=3600',
+              );
+              
+              // Add ETag based on response body (handled by NestJS automatically if enabled)
+              // Enable ETag generation
+              response.setHeader('ETag', 'W/"' + Date.now() + '"');
+            }
           } catch (error) {
             // Silently ignore if headers can't be set (response already sent)
             // This prevents "Cannot set headers after they are sent" errors

@@ -4,48 +4,60 @@ import { PagesService } from './pages.service';
 import { CreatePageDto } from './dto/create-page.dto';
 import { UpdatePageDto } from './dto/update-page.dto';
 import { PaginationDto } from './dto/pagination.dto';
+import { SkipCsrf } from 'src/auth/csrf';
+import { SkipThrottle } from '@nestjs/throttler';
 
+@SkipCsrf()
 @Controller('pages')
 export class PagesController {
   constructor(private readonly pagesService: PagesService) {}
 
+  @SkipThrottle()
   @Post()
   create(@Body() dto: CreatePageDto) {
     return this.pagesService.create(dto);
   }
 
+  @SkipThrottle()
   @Get()
   findAll(@Query() paginationDto: PaginationDto) {
     return this.pagesService.findAll(paginationDto);
   }
 
+  @SkipThrottle()
   @Get('slug/:slug')
   findBySlug(
     @Param('slug') slug: string,
     @Query() paginationDto: PaginationDto,
     @Req() req: Request,
   ) {
+    // Decode the slug in case it was URL encoded (e.g., team%2Fall -> team/all)
+    const decodedSlug = decodeURIComponent(slug);
+    
     // Check if pagination query params were actually provided
     const hasPaginationParams = req.query?.page !== undefined || req.query?.limit !== undefined;
-    return this.pagesService.findBySlug(slug, hasPaginationParams ? paginationDto : undefined);
+    return this.pagesService.findBySlug(decodedSlug, hasPaginationParams ? paginationDto : undefined);
   }
 
+  @SkipThrottle()
+  @Delete(':id')
+  remove(@Param('id', ParseIntPipe) id: number) {
+    return this.pagesService.remove(id);
+  }
+
+  @SkipThrottle()
+  @Patch(':id')
+  update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdatePageDto) {
+    return this.pagesService.update(id, dto);
+  }
+
+  @SkipThrottle()
   @Get(':id')
   findOne(
     @Param('id', ParseIntPipe) id: number,
     @Query() paginationDto: PaginationDto,
   ) {
     return this.pagesService.findOne(id, paginationDto);
-  }
-
-  @Patch(':id')
-  update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdatePageDto) {
-    return this.pagesService.update(id, dto);
-  }
-
-  @Delete(':id')
-  remove(@Param('id', ParseIntPipe) id: number) {
-    return this.pagesService.remove(id);
   }
 }
 
