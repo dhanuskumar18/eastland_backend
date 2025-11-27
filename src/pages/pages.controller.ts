@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, ParseIntPipe, Query, Req } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, ParseIntPipe, Query, Req, Header } from '@nestjs/common';
 import type { Request } from 'express';
 import { PagesService } from './pages.service';
 import { CreatePageDto } from './dto/create-page.dto';
@@ -14,12 +14,18 @@ export class PagesController {
 
   @SkipThrottle()
   @Post()
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+  @Header('Pragma', 'no-cache')
+  @Header('Expires', '0')
   create(@Body() dto: CreatePageDto) {
     return this.pagesService.create(dto);
   }
 
   @SkipThrottle()
   @Get()
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+  @Header('Pragma', 'no-cache')
+  @Header('Expires', '0')
   findAll(@Query() paginationDto: PaginationDto) {
     return this.pagesService.findAll(paginationDto);
   }

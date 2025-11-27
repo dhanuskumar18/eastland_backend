@@ -11,6 +11,7 @@ import {
   Req,
   HttpCode,
   HttpStatus,
+  Header,
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { YouTubeVideosService } from './youtube-videos.service';
@@ -26,6 +27,9 @@ export class YouTubeVideosController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+  @Header('Pragma', 'no-cache')
+  @Header('Expires', '0')
   async create(@Body() dto: CreateYouTubeVideoDto) {
     const data = await this.youtubeVideosService.create(dto);
     return {
@@ -38,6 +42,9 @@ export class YouTubeVideosController {
   }
 
   @Get()
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+  @Header('Pragma', 'no-cache')
+  @Header('Expires', '0')
   async findAll(
     @Query() paginationDto?: PaginationDto,
     @Req() req?: Request,
@@ -66,6 +73,9 @@ export class YouTubeVideosController {
   }
 
   @Get(':id')
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+  @Header('Pragma', 'no-cache')
+  @Header('Expires', '0')
   async findOne(@Param('id', ParseIntPipe) id: number) {
     const data = await this.youtubeVideosService.findOne(id);
     return {
@@ -78,6 +88,9 @@ export class YouTubeVideosController {
   }
 
   @Patch(':id')
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+  @Header('Pragma', 'no-cache')
+  @Header('Expires', '0')
   async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateYouTubeVideoDto,
@@ -94,6 +107,9 @@ export class YouTubeVideosController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+  @Header('Pragma', 'no-cache')
+  @Header('Expires', '0')
   async remove(@Param('id', ParseIntPipe) id: number) {
     await this.youtubeVideosService.remove(id);
     return {

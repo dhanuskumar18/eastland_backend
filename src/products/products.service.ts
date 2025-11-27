@@ -3,16 +3,13 @@ import { DatabaseService } from '../database/database.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { PaginationDto } from '../brand/dto/pagination.dto';
-import { CacheService } from '../common/cache/cache.service';
 
 @Injectable()
 export class ProductsService {
   private readonly logger = new Logger(ProductsService.name);
-  private readonly CACHE_TTL = 300; // 5 minutes
   
   constructor(
     private readonly db: DatabaseService,
-    private readonly cache: CacheService,
   ) {}
 
   async create(dto: CreateProductDto) {
@@ -106,9 +103,6 @@ export class ProductsService {
       },
     });
 
-    // Invalidate cache
-    await this.cache.delPattern('products:*');
-
     return product;
   }
 
@@ -117,16 +111,6 @@ export class ProductsService {
       const page = paginationDto.page ?? 1;
       const limit = paginationDto.limit ?? 10;
       const skip = (page - 1) * limit;
-
-      // Cache key based on pagination params
-      const cacheKey = `products:paginated:${page}:${limit}`;
-      
-      // Try to get from cache first
-      const cached = await this.cache.get(cacheKey);
-      if (cached) {
-        this.logger.debug(`Cache hit for ${cacheKey}`);
-        return cached;
-      }
 
       const [data, total] = await Promise.all([
         this.db.product.findMany({
@@ -179,18 +163,7 @@ export class ProductsService {
         },
       };
 
-      // Cache the result
-      await this.cache.set(cacheKey, result, this.CACHE_TTL);
-      
       return result;
-    }
-
-    // For non-paginated requests, use cache
-    const cacheKey = 'products:all';
-    const cached = await this.cache.get(cacheKey);
-    if (cached) {
-      this.logger.debug(`Cache hit for ${cacheKey}`);
-      return cached;
     }
 
     const data = await this.db.product.findMany({
@@ -223,20 +196,10 @@ export class ProductsService {
       },
     });
 
-    await this.cache.set(cacheKey, data, this.CACHE_TTL);
     return data;
   }
 
   async findOne(id: number) {
-    const cacheKey = `products:${id}`;
-    
-    // Try cache first
-    const cached = await this.cache.get(cacheKey);
-    if (cached) {
-      this.logger.debug(`Cache hit for ${cacheKey}`);
-      return cached;
-    }
-
     const product = await this.db.product.findUnique({
       where: { id },
       select: {
@@ -265,9 +228,6 @@ export class ProductsService {
     });
 
     if (!product) throw new NotFoundException('Product not found');
-    
-    // Cache the result
-    await this.cache.set(cacheKey, product, this.CACHE_TTL);
     
     return product;
   }
@@ -399,13 +359,6 @@ export class ProductsService {
       });
     }
 
-    // Invalidate cache
-    await Promise.all([
-      this.cache.del(`products:${id}`),
-      this.cache.delPattern('products:paginated:*'),
-      this.cache.del('products:all'),
-    ]);
-
     return this.findOne(id);
   }
 
@@ -430,13 +383,6 @@ export class ProductsService {
 
     // Delete the product (many-to-many relations will be handled automatically)
     const result = await this.db.product.delete({ where: { id } });
-
-    // Invalidate cache
-    await Promise.all([
-      this.cache.del(`products:${id}`),
-      this.cache.delPattern('products:paginated:*'),
-      this.cache.del('products:all'),
-    ]);
 
     return result;
   }

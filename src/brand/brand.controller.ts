@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, ParseIntPipe, Query, Req } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, ParseIntPipe, Query, Req, Header } from '@nestjs/common';
 import type { Request } from 'express';
 import { BrandService } from './brand.service';
 import { CreateBrandDto } from './dto/create-brand.dto';
@@ -12,11 +12,17 @@ export class BrandController {
   constructor(private readonly service: BrandService) {}
 
   @Post()
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+  @Header('Pragma', 'no-cache')
+  @Header('Expires', '0')
   create(@Body() dto: CreateBrandDto) {
     return this.service.create(dto);
   }
 
   @Get()
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+  @Header('Pragma', 'no-cache')
+  @Header('Expires', '0')
   findAll(
     @Query() paginationDto?: PaginationDto,
     @Req() req?: Request,
@@ -27,16 +33,25 @@ export class BrandController {
   }
 
   @Get(':id')
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+  @Header('Pragma', 'no-cache')
+  @Header('Expires', '0')
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.service.findOne(id);
   }
 
   @Patch(':id')
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+  @Header('Pragma', 'no-cache')
+  @Header('Expires', '0')
   update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateBrandDto) {
     return this.service.update(id, dto);
   }
 
   @Delete(':id')
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+  @Header('Pragma', 'no-cache')
+  @Header('Expires', '0')
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.service.remove(id);
   }

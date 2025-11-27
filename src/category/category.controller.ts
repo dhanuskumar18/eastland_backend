@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, ParseIntPipe, Query, BadRequestException, Req } from '@nestjs/common';  
+import { Controller, Get, Post, Body, Patch, Param, Delete, ParseIntPipe, Query, BadRequestException, Req, Header } from '@nestjs/common';  
 import type { Request } from 'express';
 import { CategoryService } from './category.service';
 import { CategoryForDto, CreateCategoryDto } from './dto/create-category.dto';
@@ -11,11 +11,17 @@ import { SkipCsrf } from 'src/auth/csrf';
 export class CategoryController {
   constructor(private readonly service: CategoryService) {}
   @Post()
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+  @Header('Pragma', 'no-cache')
+  @Header('Expires', '0')
   create(@Body() dto: CreateCategoryDto) {
     return this.service.create(dto);
   }
 
   @Get()
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+  @Header('Pragma', 'no-cache')
+  @Header('Expires', '0')
   findAll(
     @Query('for') forType?: CategoryForDto,
     @Query('page', new ParseIntPipe({ optional: true })) page?: number,
@@ -35,6 +41,9 @@ export class CategoryController {
   }
 
   @Get(':id')
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+  @Header('Pragma', 'no-cache')
+  @Header('Expires', '0')
   findOne(
     @Param('id', ParseIntPipe) id: number,
     @Query('for') forType: CategoryForDto,
@@ -44,6 +53,9 @@ export class CategoryController {
   }
 
   @Patch(':id')
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+  @Header('Pragma', 'no-cache')
+  @Header('Expires', '0')
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateCategoryDto,
@@ -52,6 +64,9 @@ export class CategoryController {
   }
 
   @Delete(':id')
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+  @Header('Pragma', 'no-cache')
+  @Header('Expires', '0')
   remove(
     @Param('id', ParseIntPipe) id: number,
     @Query('for') forType: CategoryForDto,

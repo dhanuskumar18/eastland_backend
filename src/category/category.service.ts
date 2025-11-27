@@ -3,26 +3,20 @@ import { DatabaseService } from '../database/database.service';
 import { CategoryForDto, CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 import { PaginationDto } from './dto/pagination.dto';
-import { CacheService } from '../common/cache/cache.service';
 
 type CategoryListItem = { id: number; name: string; for: CategoryForDto };
 
 @Injectable()
 export class CategoryService {
   private readonly logger = new Logger(CategoryService.name);
-  private readonly CACHE_TTL = 600; // 10 minutes
 
   constructor(
     private readonly db: DatabaseService,
-    private readonly cache: CacheService,
   ) {}
 
   async create(dto: CreateCategoryDto) {
     const type = this.mapForToType(dto.for);
     const category = await (this.db as any).category.create({ data: { name: dto.name, type: type as any } as any });
-    
-    // Invalidate cache
-    await this.cache.delPattern('categories:*');
     
     return category;
   }
@@ -35,13 +29,6 @@ export class CategoryService {
       const page = paginationDto.page ?? 1;
       const limit = paginationDto.limit ?? 10;
       const skip = (page - 1) * limit;
-
-      const cacheKey = `categories:paginated:${filterFor || 'all'}:${page}:${limit}`;
-      const cached = await this.cache.get(cacheKey);
-      if (cached) {
-        this.logger.debug(`Cache hit for ${cacheKey}`);
-        return cached;
-      }
 
       const [data, total] = await Promise.all([
         (this.db as any).category.findMany({
@@ -68,16 +55,7 @@ export class CategoryService {
         },
       };
 
-      await this.cache.set(cacheKey, result, this.CACHE_TTL);
       return result;
-    }
-
-    // Return all results if no pagination
-    const cacheKey = `categories:all:${filterFor || 'all'}`;
-    const cached = await this.cache.get(cacheKey);
-    if (cached) {
-      this.logger.debug(`Cache hit for ${cacheKey}`);
-      return cached;
     }
 
     const rows = await (this.db as any).category.findMany({ 
@@ -90,7 +68,6 @@ export class CategoryService {
       .map((r: any) => ({ id: r.id, name: r.name, for: this.mapTypeToFor(r.type) }))
       .sort((a, b) => b.id - a.id);
 
-    await this.cache.set(cacheKey, result, this.CACHE_TTL);
     return result;
   }
 
@@ -124,9 +101,6 @@ export class CategoryService {
     
     const updated = await (this.db as any).category.update({ where: { id }, data: data as any });
     
-    // Invalidate cache
-    await this.cache.delPattern('categories:*');
-    
     return updated;
   }
 
@@ -140,9 +114,6 @@ export class CategoryService {
     }
     
     const result = await (this.db as any).category.delete({ where: { id } });
-    
-    // Invalidate cache
-    await this.cache.delPattern('categories:*');
     
     return result;
   }
