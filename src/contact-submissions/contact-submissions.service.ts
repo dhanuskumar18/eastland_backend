@@ -73,6 +73,7 @@ export class ContactSubmissionsService {
             subject: true,
             message: true,
             customFields: true,
+            isRead: true,
             createdAt: true,
           },
         }),
@@ -179,6 +180,108 @@ export class ContactSubmissionsService {
       status: true,
       code: 200,
       message: 'Contact submission deleted successfully',
+    };
+  }
+
+  async getUnreadCount() {
+    const cacheKey = 'contact-submissions:unread-count';
+    const cached = await this.cache.get(cacheKey);
+    if (cached) {
+      this.logger.debug(`Cache hit for ${cacheKey}`);
+      return cached;
+    }
+
+    const count = await this.db.contactSubmission.count({
+      where: { isRead: false },
+    });
+
+    const result = {
+      status: true,
+      code: 200,
+      data: { count },
+    };
+
+    await this.cache.set(cacheKey, result, 60); // Cache for 1 minute
+    return result;
+  }
+
+  async getUnreadSubmissions(limit: number = 5) {
+    const cacheKey = `contact-submissions:unread:${limit}`;
+    const cached = await this.cache.get(cacheKey);
+    if (cached) {
+      this.logger.debug(`Cache hit for ${cacheKey}`);
+      return cached;
+    }
+
+    const data = await this.db.contactSubmission.findMany({
+      where: { isRead: false },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        subject: true,
+        message: true,
+        customFields: true,
+        createdAt: true,
+        isRead: true,
+      },
+    });
+
+    const parsedData = data.map(item => ({
+      ...item,
+      customFields: this.parseCustomFields(item.customFields),
+    }));
+
+    const result = {
+      status: true,
+      code: 200,
+      data: parsedData,
+    };
+
+    await this.cache.set(cacheKey, result, 60); // Cache for 1 minute
+    return result;
+  }
+
+  async markAsRead(id: number) {
+    const existing = await this.db.contactSubmission.findUnique({
+      where: { id },
+    });
+
+    if (!existing) {
+      throw new NotFoundException('Contact submission not found');
+    }
+
+    await this.db.contactSubmission.update({
+      where: { id },
+      data: { isRead: true },
+    });
+
+    // Invalidate cache
+    await this.cache.delPattern('contact-submissions:*');
+
+    return {
+      status: true,
+      code: 200,
+      message: 'Contact submission marked as read',
+    };
+  }
+
+  async markAllAsRead() {
+    await this.db.contactSubmission.updateMany({
+      where: { isRead: false },
+      data: { isRead: true },
+    });
+
+    // Invalidate cache
+    await this.cache.delPattern('contact-submissions:*');
+
+    return {
+      status: true,
+      code: 200,
+      message: 'All contact submissions marked as read',
     };
   }
 }

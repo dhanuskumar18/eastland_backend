@@ -33,6 +33,27 @@ export class ContactSubmissionsController {
     return this.contactSubmissionsService.findAll(paginationDto);
   }
 
+  // Specific routes must come BEFORE parameterized routes
+  @UseGuards(JwtGuard)
+  @Get('unread/count')
+  getUnreadCount() {
+    return this.contactSubmissionsService.getUnreadCount();
+  }
+
+  @UseGuards(JwtGuard)
+  @Get('unread/list')
+  getUnreadSubmissions(@Query('limit') limit?: string) {
+    const limitNum = limit ? parseInt(limit, 10) : 5;
+    return this.contactSubmissionsService.getUnreadSubmissions(limitNum);
+  }
+
+  @UseGuards(JwtGuard)
+  @Post('read/all')
+  markAllAsRead() {
+    return this.contactSubmissionsService.markAllAsRead();
+  }
+
+  // Parameterized routes come last
   @UseGuards(JwtGuard)
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {
@@ -43,6 +64,12 @@ export class ContactSubmissionsController {
   @Delete(':id')
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.contactSubmissionsService.remove(id);
+  }
+
+  @UseGuards(JwtGuard)
+  @Post(':id/read')
+  markAsRead(@Param('id', ParseIntPipe) id: number) {
+    return this.contactSubmissionsService.markAsRead(id);
   }
 }
 
