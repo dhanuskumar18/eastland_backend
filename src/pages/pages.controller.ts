@@ -8,11 +8,11 @@ import { SkipCsrf } from 'src/auth/csrf';
 import { SkipThrottle } from '@nestjs/throttler';
 
 @SkipCsrf()
+@SkipThrottle() // Skip throttling for all methods in this controller
 @Controller('pages')
 export class PagesController {
   constructor(private readonly pagesService: PagesService) {}
 
-  @SkipThrottle()
   @Post()
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   @Header('Pragma', 'no-cache')
@@ -21,7 +21,6 @@ export class PagesController {
     return this.pagesService.create(dto);
   }
 
-  @SkipThrottle()
   @Get()
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   @Header('Pragma', 'no-cache')
@@ -30,7 +29,6 @@ export class PagesController {
     return this.pagesService.findAll(paginationDto);
   }
 
-  @SkipThrottle()
   @Get('slug/:slug')
   findBySlug(
     @Param('slug') slug: string,
@@ -45,19 +43,16 @@ export class PagesController {
     return this.pagesService.findBySlug(decodedSlug, hasPaginationParams ? paginationDto : undefined);
   }
 
-  @SkipThrottle()
   @Delete(':id')
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.pagesService.remove(id);
   }
 
-  @SkipThrottle()
   @Patch(':id')
   update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdatePageDto) {
     return this.pagesService.update(id, dto);
   }
 
-  @SkipThrottle()
   @Get(':id')
   findOne(
     @Param('id', ParseIntPipe) id: number,
