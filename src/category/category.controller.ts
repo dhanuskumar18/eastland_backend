@@ -5,8 +5,10 @@ import { CategoryForDto, CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 import { PaginationDto } from './dto/pagination.dto';
 import { SkipCsrf } from 'src/auth/csrf';
-@SkipCsrf()
+import { SkipThrottle } from '@nestjs/throttler';
 
+@SkipCsrf()
+@SkipThrottle() // Skip throttling for public category listings
 @Controller('categories')
 export class CategoryController {
   constructor(private readonly service: CategoryService) {}

@@ -30,6 +30,7 @@ export class PagesController {
   }
 
   @Get('slug/:slug')
+  @SkipThrottle() // Ensure slug endpoint skips throttling
   findBySlug(
     @Param('slug') slug: string,
     @Query() paginationDto: PaginationDto,

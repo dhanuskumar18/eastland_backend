@@ -3,6 +3,7 @@ import { DatabaseService } from '../database/database.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { PaginationDto } from '../brand/dto/pagination.dto';
+import { ProductFilterDto } from './dto/filter.dto';
 
 @Injectable()
 export class ProductsService {
@@ -106,7 +107,49 @@ export class ProductsService {
     return product;
   }
 
-  async findAll(paginationDto?: PaginationDto) {
+  async findAll(paginationDto?: PaginationDto, filterDto?: ProductFilterDto) {
+    // Build where clause for filtering
+    const where: any = {};
+
+    if (filterDto?.search) {
+      const searchLower = filterDto.search.toLowerCase();
+      where.OR = [
+        { sku: { contains: searchLower, mode: 'insensitive' } },
+        {
+          translations: {
+            some: {
+              OR: [
+                { name: { contains: searchLower, mode: 'insensitive' } },
+                { description: { contains: searchLower, mode: 'insensitive' } },
+              ],
+            },
+          },
+        },
+      ];
+    }
+
+    if (filterDto?.category) {
+      where.categories = {
+        some: {
+          name: { equals: filterDto.category, mode: 'insensitive' },
+        },
+      };
+    }
+
+    if (filterDto?.tag) {
+      where.tags = {
+        some: {
+          name: { equals: filterDto.tag, mode: 'insensitive' },
+        },
+      };
+    }
+
+    if (filterDto?.brand) {
+      where.brand = {
+        name: { equals: filterDto.brand, mode: 'insensitive' },
+      };
+    }
+
     if (paginationDto && (paginationDto.page !== undefined || paginationDto.limit !== undefined)) {
       const page = paginationDto.page ?? 1;
       const limit = paginationDto.limit ?? 10;
@@ -114,6 +157,7 @@ export class ProductsService {
 
       const [data, total] = await Promise.all([
         this.db.product.findMany({
+          where,
           skip,
           take: limit,
           orderBy: { id: 'desc' },
@@ -146,7 +190,7 @@ export class ProductsService {
             },
           },
         }),
-        this.db.product.count(),
+        this.db.product.count({ where }),
       ]);
 
       const totalPages = Math.ceil(total / limit);
@@ -167,6 +211,7 @@ export class ProductsService {
     }
 
     const data = await this.db.product.findMany({
+      where,
       orderBy: { id: 'desc' },
       select: {
         id: true,

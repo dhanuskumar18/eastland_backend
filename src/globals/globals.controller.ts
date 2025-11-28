@@ -3,7 +3,9 @@ import { GlobalsService } from './globals.service';
 import { CreateGlobalDto } from './dto/create-global.dto';
 import { UpdateGlobalDto } from './dto/update-global.dto';
 import { PaginationDto } from './dto/pagination.dto';
+import { SkipThrottle } from '@nestjs/throttler';
 
+@SkipThrottle() // Skip throttling for public global endpoints
 @Controller('globals')
 export class GlobalsController {
   constructor(private readonly globalsService: GlobalsService) {}

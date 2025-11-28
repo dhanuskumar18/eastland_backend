@@ -5,8 +5,10 @@ import { CreateBrandDto } from './dto/create-brand.dto';
 import { UpdateBrandDto } from './dto/update-brand.dto';
 import { PaginationDto } from './dto/pagination.dto';
 import { SkipCsrf } from 'src/auth/csrf';
+import { SkipThrottle } from '@nestjs/throttler';
 
 @SkipCsrf()
+@SkipThrottle() // Skip throttling for public brand listings
 @Controller('brands')
 export class BrandController {
   constructor(private readonly service: BrandService) {}

@@ -5,7 +5,10 @@ import { TagForDto, CreateTagDto } from './dto/create-tag.dto';
 import { UpdateTagDto } from './dto/update-tag.dto';
 import { PaginationDto } from './dto/pagination.dto';
 import { SkipCsrf } from 'src/auth/csrf';
+import { SkipThrottle } from '@nestjs/throttler';
+
 @SkipCsrf()
+@SkipThrottle() // Skip throttling for public tag listings
 @Controller('tags')
 export class TagsController {
   constructor(private readonly tagsService: TagsService) {}

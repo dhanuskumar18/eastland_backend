@@ -3,6 +3,7 @@ import { DatabaseService } from '../database/database.service';
 import { CreateYouTubeVideoDto } from './dto/create-youtube-video.dto';
 import { UpdateYouTubeVideoDto } from './dto/update-youtube-video.dto';
 import { PaginationDto } from '../brand/dto/pagination.dto';
+import { YouTubeVideoFilterDto } from './dto/filter.dto';
 
 @Injectable()
 export class YouTubeVideosService {
@@ -91,7 +92,44 @@ export class YouTubeVideosService {
     };
   }
 
-  async findAll(paginationDto?: PaginationDto) {
+  async findAll(paginationDto?: PaginationDto, filterDto?: YouTubeVideoFilterDto) {
+    // Build where clause for filtering
+    const where: any = {};
+
+    if (filterDto?.search) {
+      const searchLower = filterDto.search.toLowerCase();
+      where.translations = {
+        some: {
+          OR: [
+            { name: { contains: searchLower, mode: 'insensitive' } },
+            { description: { contains: searchLower, mode: 'insensitive' } },
+          ],
+        },
+      };
+    }
+
+    if (filterDto?.category) {
+      where.categories = {
+        some: {
+          name: { equals: filterDto.category, mode: 'insensitive' },
+        },
+      };
+    }
+
+    if (filterDto?.tag) {
+      where.tags = {
+        some: {
+          name: { equals: filterDto.tag, mode: 'insensitive' },
+        },
+      };
+    }
+
+    if (filterDto?.brand) {
+      where.brand = {
+        name: { equals: filterDto.brand, mode: 'insensitive' },
+      };
+    }
+
     if (paginationDto && (paginationDto.page !== undefined || paginationDto.limit !== undefined)) {
       const page = paginationDto.page ?? 1;
       const limit = paginationDto.limit ?? 10;
@@ -99,6 +137,7 @@ export class YouTubeVideosService {
 
       const [data, total] = await Promise.all([
         this.db.youTubeVideo.findMany({
+          where,
           skip,
           take: limit,
           orderBy: { id: 'desc' },
@@ -115,7 +154,7 @@ export class YouTubeVideosService {
             },
           },
         }),
-        this.db.youTubeVideo.count(),
+        this.db.youTubeVideo.count({ where }),
       ]);
 
       const totalPages = Math.ceil(total / limit);
@@ -132,6 +171,7 @@ export class YouTubeVideosService {
     }
 
     const videos = await this.db.youTubeVideo.findMany({
+      where,
       orderBy: { id: 'desc' },
       include: {
         brand: true,

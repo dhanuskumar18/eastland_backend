@@ -7,7 +7,6 @@ import {
   Param,
   Delete,
   ParseIntPipe,
-  Query,
   Req,
   Header,
 } from '@nestjs/common';
@@ -16,9 +15,12 @@ import { ProductsService } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { PaginationDto } from '../brand/dto/pagination.dto';
+import type { ProductFilterDto } from './dto/filter.dto';
 import { SkipCsrf } from 'src/auth/csrf';
+import { SkipThrottle } from '@nestjs/throttler';
 
 @SkipCsrf()
+@SkipThrottle() // Skip throttling for public product listings
 @Controller('products')
 export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}
@@ -32,15 +34,32 @@ export class ProductsController {
   }
 
   @Get()
+  @SkipThrottle() // Ensure GET requests skip throttling
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   @Header('Pragma', 'no-cache')
   @Header('Expires', '0')
-  findAll(
-    @Query() paginationDto?: PaginationDto,
-    @Req() req?: Request,
-  ) {
+  findAll(@Req() req?: Request) {
+    // Extract pagination parameters manually to avoid DTO validation conflicts
     const hasPaginationParams = req?.query?.page !== undefined || req?.query?.limit !== undefined;
-    return this.productsService.findAll(hasPaginationParams ? paginationDto : undefined);
+    const paginationDto: PaginationDto | undefined = hasPaginationParams
+      ? {
+          page: req?.query?.page ? Number(req.query.page) : undefined,
+          limit: req?.query?.limit ? Number(req.query.limit) : undefined,
+        }
+      : undefined;
+    
+    // Extract filter parameters manually to avoid DTO validation conflicts
+    const filterDto: ProductFilterDto = {
+      search: req?.query?.search as string | undefined,
+      category: req?.query?.category as string | undefined,
+      tag: req?.query?.tag as string | undefined,
+      brand: req?.query?.brand as string | undefined,
+    };
+    
+    return this.productsService.findAll(
+      paginationDto,
+      filterDto,
+    );
   }
 
   @Get(':id')
