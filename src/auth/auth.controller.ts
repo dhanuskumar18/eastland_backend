@@ -23,6 +23,7 @@ import {
   ChangePasswordDto,
   UpdateProfileDto,
   VerifyLoginMfaDto,
+  DeleteAccountDto,
 } from "./dto";
 import { JwtGuard } from "./guard";
 import { GetUser } from "./decorator";
@@ -477,6 +478,32 @@ export class AuthController {
     // Rate limited to prevent brute force attacks
     // If rate limit exceeded, user must wait before retrying
     return this.authService.changePassword(userId, dto);
+  }
+
+  // GDPR: Data Access Request
+  // COMPLIANCE CHECKLIST ITEM #14.1: Users can request access to their personal data
+  @UseGuards(JwtGuard)
+  @Get("my-data")
+  async getMyData(@GetUser("id") userId: number) {
+    const data = await this.authService.getUserData(userId);
+    return {
+      success: true,
+      message: 'Your personal data',
+      data,
+    };
+  }
+
+  // GDPR: Right to be Forgotten (Account Deletion)
+  // COMPLIANCE CHECKLIST ITEM #14.3: Users can request deletion of their personal data
+  @UseGuards(JwtGuard)
+  @Throttle({ short: { limit: 3, ttl: 60000 } }) // 3 attempts per minute for account deletion
+  @Post("delete-account")
+  async deleteMyAccount(
+    @GetUser("id") userId: number,
+    @Body() dto: DeleteAccountDto,
+    @Req() req: Request
+  ) {
+    return this.authService.deleteOwnAccount(userId, dto.password, req);
   }
 
   // MFA Login Verification

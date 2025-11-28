@@ -4,6 +4,7 @@ import { ValidationPipe } from '@nestjs/common';
 import cookieParser from 'cookie-parser';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
+import helmet from 'helmet';
 // @ts-ignore - compression is a CommonJS module
 const compression = require('compression');
 
@@ -56,6 +57,38 @@ async function bootstrap() {
   });
 
   app.use(cookieParser());
+  
+  // CONFIGURATION CHECKLIST ITEMS #10-14: Security Headers
+  // Configure helmet for comprehensive security headers
+  app.use(helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+        fontSrc: ["'self'", "https://fonts.gstatic.com"],
+        scriptSrc: ["'self'", "https://www.google.com", "https://www.gstatic.com"],
+        imgSrc: ["'self'", "data:", "https:", "http:"],
+        connectSrc: ["'self'"],
+        frameSrc: ["'self'", "https://www.google.com"],
+        objectSrc: ["'none'"],
+        upgradeInsecureRequests: [],
+      },
+    },
+    hsts: {
+      maxAge: 31536000, // 1 year
+      includeSubDomains: true,
+      preload: true,
+    },
+    frameguard: {
+      action: 'deny', // X-Frame-Options: DENY
+    },
+    noSniff: true, // X-Content-Type-Options: nosniff
+    referrerPolicy: {
+      policy: 'strict-origin-when-cross-origin',
+    },
+    xssFilter: true, // X-XSS-Protection (legacy, but still useful)
+    permittedCrossDomainPolicies: false,
+  }));
   
   // Enable compression for all responses (gzip/deflate)
   // This significantly reduces response size and improves performance
