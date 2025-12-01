@@ -430,6 +430,35 @@ export class SeoService {
     };
   }
 
+  async getPageSeoBySlug(slug: string) {
+    // First verify page exists by slug
+    const page = await this.prisma.page.findUnique({
+      where: { slug },
+    });
+
+    if (!page) {
+      throw new NotFoundException('Page not found');
+    }
+
+    const pageSeo = await this.prisma.pageSeo.findUnique({
+      where: { pageId: page.id },
+    });
+
+    if (!pageSeo) {
+      throw new NotFoundException('Page SEO settings not found');
+    }
+
+    return {
+      pageId: pageSeo.pageId,
+      metaTitle: pageSeo.metaTitle,
+      metaDescription: pageSeo.metaDescription,
+      metaKeywords: pageSeo.metaKeywords || undefined,
+      canonicalUrl: pageSeo.canonicalUrl || undefined,
+      robots: pageSeo.robots,
+      structuredData: pageSeo.structuredData || undefined,
+    };
+  }
+
   async createPageSeo(dto: CreatePageSeoDto) {
     // Verify page exists
     const page = await this.prisma.page.findUnique({

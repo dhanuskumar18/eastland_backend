@@ -161,7 +161,6 @@ export class SeoController {
   // Global SEO Endpoints
 
   @Get('global')
-  @UseGuards(JwtGuard)
   @SkipCsrf()
   @SkipThrottle()
   @Header('Cache-Control', 'no-cache, must-revalidate')
@@ -243,14 +242,43 @@ export class SeoController {
 
   // Page SEO Endpoints
 
-  @Get('pages/:pageId')
-  @UseGuards(JwtGuard)
+    @Get('pages/:pageId')
+    @SkipCsrf()
+    @SkipThrottle()
+    @Header('Cache-Control', 'no-cache, must-revalidate')
+    async getPageSeo(@Param('pageId', ParseIntPipe) pageId: number) {
+    try {
+      const data = await this.seoService.getPageSeo(pageId);
+      return {
+        version: '1',
+        code: 200,
+        status: true,
+        message: 'Page SEO settings retrieved successfully',
+        validationErrors: [],
+        data,
+      };
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        return {
+          version: '1',
+          code: 404,
+          status: false,
+          message: 'Page SEO settings not found',
+          validationErrors: [],
+          data: null,
+        };
+      }
+      throw error;
+    }
+  }
+
+  @Get('pages/slug/:slug')
   @SkipCsrf()
   @SkipThrottle()
   @Header('Cache-Control', 'no-cache, must-revalidate')
-  async getPageSeo(@Param('pageId', ParseIntPipe) pageId: number) {
+  async getPageSeoBySlug(@Param('slug') slug: string) {
     try {
-      const data = await this.seoService.getPageSeo(pageId);
+      const data = await this.seoService.getPageSeoBySlug(slug);
       return {
         version: '1',
         code: 200,
