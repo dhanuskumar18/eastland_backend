@@ -19,6 +19,7 @@ export class PublicThrottlerGuard extends ThrottlerGuard {
       // List of public endpoints that should not be throttled
       const publicEndpoints = [
         '/products',
+        '/api/seo',
         '/youtube-videos',
         '/testimonials',
         '/pages',

@@ -1,4 +1,9 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { Upload } from '@aws-sdk/lib-storage';
@@ -6,6 +11,10 @@ import sharp from 'sharp';
 import { v4 as uuidv4 } from 'uuid';
 import { DatabaseService } from '../database/database.service';
 import { LazyLoadingSettingsDto, SectionLazyLoadingDto } from './dto/lazy-loading.dto';
+import { CreateGlobalSeoDto } from './dto/create-global-seo.dto';
+import { UpdateGlobalSeoDto } from './dto/update-global-seo.dto';
+import { CreatePageSeoDto } from './dto/create-page-seo.dto';
+import { UpdatePageSeoDto } from './dto/update-page-seo.dto';
 
 @Injectable()
 export class SeoService {
@@ -283,6 +292,235 @@ export class SeoService {
     return {
       count: savedSections.length,
       sections: savedSections,
+    };
+  }
+
+  // Global SEO Methods
+
+  async getGlobalSeo() {
+    const globalSeo = await this.prisma.globalSeo.findFirst();
+
+    if (!globalSeo) {
+      throw new NotFoundException('Global SEO settings not found');
+    }
+
+    return {
+      siteName: globalSeo.siteName,
+      defaultTitle: globalSeo.defaultTitle,
+      defaultDescription: globalSeo.defaultDescription,
+      defaultKeywords: globalSeo.defaultKeywords,
+      googleSiteVerification: globalSeo.googleSiteVerification || undefined,
+      bingSiteVerification: globalSeo.bingSiteVerification || undefined,
+      robotsTxt: globalSeo.robotsTxt || undefined,
+    };
+  }
+
+  async createOrUpdateGlobalSeo(dto: CreateGlobalSeoDto) {
+    // Check if settings exist
+    const existing = await this.prisma.globalSeo.findFirst();
+
+    let result;
+    if (existing) {
+      // Update existing
+      result = await this.prisma.globalSeo.update({
+        where: { id: existing.id },
+        data: {
+          siteName: dto.siteName,
+          defaultTitle: dto.defaultTitle,
+          defaultDescription: dto.defaultDescription,
+          defaultKeywords: dto.defaultKeywords,
+          googleSiteVerification: dto.googleSiteVerification || null,
+          bingSiteVerification: dto.bingSiteVerification || null,
+          robotsTxt: dto.robotsTxt || null,
+        },
+      });
+    } else {
+      // Create new
+      result = await this.prisma.globalSeo.create({
+        data: {
+          siteName: dto.siteName,
+          defaultTitle: dto.defaultTitle,
+          defaultDescription: dto.defaultDescription,
+          defaultKeywords: dto.defaultKeywords,
+          googleSiteVerification: dto.googleSiteVerification || null,
+          bingSiteVerification: dto.bingSiteVerification || null,
+          robotsTxt: dto.robotsTxt || null,
+        },
+      });
+    }
+
+    return {
+      siteName: result.siteName,
+      defaultTitle: result.defaultTitle,
+      defaultDescription: result.defaultDescription,
+      defaultKeywords: result.defaultKeywords,
+      googleSiteVerification: result.googleSiteVerification || undefined,
+      bingSiteVerification: result.bingSiteVerification || undefined,
+      robotsTxt: result.robotsTxt || undefined,
+    };
+  }
+
+  async updateGlobalSeo(dto: UpdateGlobalSeoDto) {
+    const existing = await this.prisma.globalSeo.findFirst();
+
+    if (!existing) {
+      throw new NotFoundException('Global SEO settings not found');
+    }
+
+    const result = await this.prisma.globalSeo.update({
+      where: { id: existing.id },
+      data: {
+        ...(dto.siteName !== undefined && { siteName: dto.siteName }),
+        ...(dto.defaultTitle !== undefined && { defaultTitle: dto.defaultTitle }),
+        ...(dto.defaultDescription !== undefined && {
+          defaultDescription: dto.defaultDescription,
+        }),
+        ...(dto.defaultKeywords !== undefined && {
+          defaultKeywords: dto.defaultKeywords,
+        }),
+        ...(dto.googleSiteVerification !== undefined && {
+          googleSiteVerification: dto.googleSiteVerification || null,
+        }),
+        ...(dto.bingSiteVerification !== undefined && {
+          bingSiteVerification: dto.bingSiteVerification || null,
+        }),
+        ...(dto.robotsTxt !== undefined && { robotsTxt: dto.robotsTxt || null }),
+      },
+    });
+
+    return {
+      siteName: result.siteName,
+      defaultTitle: result.defaultTitle,
+      defaultDescription: result.defaultDescription,
+      defaultKeywords: result.defaultKeywords,
+      googleSiteVerification: result.googleSiteVerification || undefined,
+      bingSiteVerification: result.bingSiteVerification || undefined,
+      robotsTxt: result.robotsTxt || undefined,
+    };
+  }
+
+  // Page SEO Methods
+
+  async getPageSeo(pageId: number) {
+    // First verify page exists
+    const page = await this.prisma.page.findUnique({
+      where: { id: pageId },
+    });
+
+    if (!page) {
+      throw new NotFoundException('Page not found');
+    }
+
+    const pageSeo = await this.prisma.pageSeo.findUnique({
+      where: { pageId },
+    });
+
+    if (!pageSeo) {
+      throw new NotFoundException('Page SEO settings not found');
+    }
+
+    return {
+      pageId: pageSeo.pageId,
+      metaTitle: pageSeo.metaTitle,
+      metaDescription: pageSeo.metaDescription,
+      metaKeywords: pageSeo.metaKeywords || undefined,
+      canonicalUrl: pageSeo.canonicalUrl || undefined,
+      robots: pageSeo.robots,
+      structuredData: pageSeo.structuredData || undefined,
+    };
+  }
+
+  async createPageSeo(dto: CreatePageSeoDto) {
+    // Verify page exists
+    const page = await this.prisma.page.findUnique({
+      where: { id: dto.pageId },
+    });
+
+    if (!page) {
+      throw new BadRequestException(`Page with ID ${dto.pageId} does not exist`);
+    }
+
+    // Check if SEO settings already exist
+    const existing = await this.prisma.pageSeo.findUnique({
+      where: { pageId: dto.pageId },
+    });
+
+    if (existing) {
+      throw new ConflictException(
+        'SEO settings already exist for this page. Use PATCH to update.',
+      );
+    }
+
+    const result = await this.prisma.pageSeo.create({
+      data: {
+        pageId: dto.pageId,
+        metaTitle: dto.metaTitle,
+        metaDescription: dto.metaDescription,
+        metaKeywords: dto.metaKeywords || null,
+        canonicalUrl: dto.canonicalUrl || null,
+        robots: dto.robots || 'index, follow',
+        structuredData: dto.structuredData || undefined,
+      },
+    });
+
+    return {
+      pageId: result.pageId,
+      metaTitle: result.metaTitle,
+      metaDescription: result.metaDescription,
+      metaKeywords: result.metaKeywords || undefined,
+      canonicalUrl: result.canonicalUrl || undefined,
+      robots: result.robots,
+      structuredData: result.structuredData || undefined,
+    };
+  }
+
+  async updatePageSeo(pageId: number, dto: UpdatePageSeoDto) {
+    // Verify page exists
+    const page = await this.prisma.page.findUnique({
+      where: { id: pageId },
+    });
+
+    if (!page) {
+      throw new NotFoundException('Page not found');
+    }
+
+    // Check if SEO settings exist
+    const existing = await this.prisma.pageSeo.findUnique({
+      where: { pageId },
+    });
+
+    if (!existing) {
+      throw new NotFoundException('Page SEO settings not found');
+    }
+
+    const result = await this.prisma.pageSeo.update({
+      where: { pageId },
+      data: {
+        ...(dto.metaTitle !== undefined && { metaTitle: dto.metaTitle }),
+        ...(dto.metaDescription !== undefined && {
+          metaDescription: dto.metaDescription,
+        }),
+        ...(dto.metaKeywords !== undefined && {
+          metaKeywords: dto.metaKeywords || null,
+        }),
+        ...(dto.canonicalUrl !== undefined && {
+          canonicalUrl: dto.canonicalUrl || null,
+        }),
+        ...(dto.robots !== undefined && { robots: dto.robots }),
+        ...(dto.structuredData !== undefined && {
+          structuredData: dto.structuredData || undefined,
+        }),
+      },
+    });
+
+    return {
+      pageId: result.pageId,
+      metaTitle: result.metaTitle,
+      metaDescription: result.metaDescription,
+      metaKeywords: result.metaKeywords || undefined,
+      canonicalUrl: result.canonicalUrl || undefined,
+      robots: result.robots,
+      structuredData: result.structuredData || undefined,
     };
   }
 }

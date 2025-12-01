@@ -1,13 +1,12 @@
 generator client {
-    provider = "prisma-client-js"
+  provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
-
 
 model Page {
   id        Int       @id @default(autoincrement())
@@ -16,17 +15,18 @@ model Page {
   updatedAt DateTime  @updatedAt
   name      String
   sections  Section[]
+  seo       PageSeo?
 
   @@index([slug])
 }
 
 model Section {
-  id           Int                  @id @default(autoincrement())
+  id           Int                    @id @default(autoincrement())
   name         String
   pageId       Int
-  createdAt    DateTime             @default(now())
-  updatedAt    DateTime             @updatedAt
-  page         Page                 @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+  page         Page                   @relation(fields: [pageId], references: [id], onDelete: Cascade)
   translations SectionTranslation[]
   lazyLoading  SeoSectionLazyLoading?
 
@@ -98,10 +98,10 @@ model Tag {
 }
 
 model Brand {
-  id           Int            @id @default(autoincrement())
-  name         String         @unique
-  slug         String         @unique
-  products     Product[]
+  id            Int            @id @default(autoincrement())
+  name          String         @unique
+  slug          String         @unique
+  products      Product[]
   youtubeVideos YouTubeVideo[]
 
   @@index([slug])
@@ -174,28 +174,28 @@ model ProductImage {
 }
 
 model Testimonial {
-  id          Int      @id @default(autoincrement())
-  clientName  String
-  profession  String
-  review      String
-  imageUrl    String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         Int      @id @default(autoincrement())
+  clientName String
+  profession String
+  review     String
+  imageUrl   String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   @@index([createdAt])
 }
 
 model YouTubeVideo {
-  id            Int                      @id @default(autoincrement())
-  youtubeLink   String
-  brandId       Int
-  createdAt     DateTime                 @default(now())
-  updatedAt     DateTime                 @updatedAt
-  brand         Brand                    @relation(fields: [brandId], references: [id])
-  translations  YouTubeVideoTranslation[]
-  categories    Category[]               @relation("YouTubeVideoCategories")
-  tags          Tag[]                    @relation("YouTubeVideoTags")
-  images        YouTubeVideoImage[]
+  id           Int                       @id @default(autoincrement())
+  youtubeLink  String
+  brandId      Int
+  createdAt    DateTime                  @default(now())
+  updatedAt    DateTime                  @updatedAt
+  brand        Brand                     @relation(fields: [brandId], references: [id])
+  translations YouTubeVideoTranslation[]
+  categories   Category[]                @relation("YouTubeVideoCategories")
+  tags         Tag[]                     @relation("YouTubeVideoTags")
+  images       YouTubeVideoImage[]
 
   @@index([youtubeLink])
   @@index([brandId])
@@ -233,15 +233,15 @@ model YouTubeVideoImage {
 }
 
 model ContactSubmission {
-  id           Int       @id @default(autoincrement())
+  id           Int      @id @default(autoincrement())
   name         String
   email        String
   phone        String?
   subject      String?
   message      String
-  customFields String?   @db.Text
-  isRead       Boolean   @default(false)
-  createdAt    DateTime  @default(now())
+  customFields String?  @db.Text
+  isRead       Boolean  @default(false)
+  createdAt    DateTime @default(now())
 
   @@index([createdAt])
   @@index([email])
@@ -249,24 +249,24 @@ model ContactSubmission {
 }
 
 model User {
-  id                Int       @id @default(autoincrement())
-  email             String    @unique
-  password          String
-  name              String?
-  roleId            Int
-  status            UserStatus @default(ACTIVE)
-  refreshToken      String?
-  mfaEnabled        Boolean   @default(false)
-  mfaSecret         String?
-  passwordChangedAt DateTime?
-  failedLoginAttempts Int    @default(0)
-  lockedUntil       DateTime?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-  otps              Otp[]
-  sessions          Session[]
-  passwordHistory   PasswordHistory[]
-  role              Role      @relation(fields: [roleId], references: [id])
+  id                  Int               @id @default(autoincrement())
+  email               String            @unique
+  password            String
+  name                String?
+  roleId              Int
+  status              UserStatus        @default(ACTIVE)
+  refreshToken        String?
+  mfaEnabled          Boolean           @default(false)
+  mfaSecret           String?
+  passwordChangedAt   DateTime?
+  failedLoginAttempts Int               @default(0)
+  lockedUntil         DateTime?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  otps                Otp[]
+  sessions            Session[]
+  passwordHistory     PasswordHistory[]
+  role                Role              @relation(fields: [roleId], references: [id])
 
   @@index([roleId])
   @@index([status])
@@ -353,41 +353,70 @@ model CsrfToken {
 }
 
 model SeoLazyLoadingSettings {
-  id                Int      @id @default(autoincrement())
-  enabled           String   @default("disable") // 'enable' or 'disable'
-  whereToApply      String   @default("all-images")
-  metaKeywords      String?
-  preloadThreshold  String?
-  loadingAttribute  String   @default("lazy") // 'lazy', 'eager', 'auto'
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  id               Int      @id @default(autoincrement())
+  enabled          String   @default("disable") // 'enable' or 'disable'
+  whereToApply     String   @default("all-images")
+  metaKeywords     String?
+  preloadThreshold String?
+  loadingAttribute String   @default("lazy") // 'lazy', 'eager', 'auto'
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 }
 
 model SeoSectionLazyLoading {
-  id                Int      @id @default(autoincrement())
-  sectionId         Int      @unique
-  enabled           Boolean  @default(false)
-  loadingAttribute  String   @default("lazy") // 'lazy', 'eager', 'auto'
-  preloadThreshold  String?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  section           Section  @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  id               Int      @id @default(autoincrement())
+  sectionId        Int      @unique
+  enabled          Boolean  @default(false)
+  loadingAttribute String   @default("lazy") // 'lazy', 'eager', 'auto'
+  preloadThreshold String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  section          Section  @relation(fields: [sectionId], references: [id], onDelete: Cascade)
 
   @@index([sectionId])
 }
 
+model GlobalSeo {
+  id                     Int      @id @default(autoincrement())
+  siteName               String   @db.VarChar(255)
+  defaultTitle           String   @db.VarChar(60)
+  defaultDescription     String   @db.VarChar(160)
+  defaultKeywords        String   @db.Text
+  googleSiteVerification String?  @db.VarChar(255)
+  bingSiteVerification   String?  @db.VarChar(255)
+  robotsTxt              String?  @db.Text
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+}
+
+model PageSeo {
+  id              Int      @id @default(autoincrement())
+  pageId          Int      @unique
+  metaTitle       String   @db.VarChar(60)
+  metaDescription String   @db.VarChar(160)
+  metaKeywords    String?  @db.Text
+  canonicalUrl    String?  @db.VarChar(500)
+  robots          String   @default("index, follow") @db.VarChar(50)
+  structuredData  Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  page            Page     @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  @@index([pageId])
+}
+
 model AuditLog {
-  id          Int       @id @default(autoincrement())
-  userId      Int?      // User who performed the action (null for system actions)
-  action      String    // Action performed (e.g., USER_CREATED, USER_DELETED, LOGIN_SUCCESS)
-  resource    String?   // Resource affected (e.g., User, Product, Role)
-  resourceId  Int?      // ID of the resource affected
-  details     Json?     // Additional details about the action (sanitized)
-  ipAddress   String?   // IP address of the user
-  userAgent   String?   // User agent string
-  status      String    @default("SUCCESS") // SUCCESS, FAILURE, ERROR
-  errorMessage String?  // Error message if status is FAILURE or ERROR
-  createdAt   DateTime  @default(now())
+  id           Int      @id @default(autoincrement())
+  userId       Int? // User who performed the action (null for system actions)
+  action       String // Action performed (e.g., USER_CREATED, USER_DELETED, LOGIN_SUCCESS)
+  resource     String? // Resource affected (e.g., User, Product, Role)
+  resourceId   Int? // ID of the resource affected
+  details      Json? // Additional details about the action (sanitized)
+  ipAddress    String? // IP address of the user
+  userAgent    String? // User agent string
+  status       String   @default("SUCCESS") // SUCCESS, FAILURE, ERROR
+  errorMessage String? // Error message if status is FAILURE or ERROR
+  createdAt    DateTime @default(now())
 
   @@index([userId])
   @@index([action])
@@ -427,7 +456,7 @@ enum TagType {
 model PasswordHistory {
   id        Int      @id @default(autoincrement())
   userId    Int
-  password  String   // Hashed password
+  password  String // Hashed password
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
