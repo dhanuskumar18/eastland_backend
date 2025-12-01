@@ -2,16 +2,13 @@ import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { CreateContactSubmissionDto } from './dto/create-contact-submission.dto';
 import { PaginationDto } from '../testimonials/dto/pagination.dto';
-import { CacheService } from '../common/cache/cache.service';
 
 @Injectable()
 export class ContactSubmissionsService {
   private readonly logger = new Logger(ContactSubmissionsService.name);
-  private readonly CACHE_TTL = 180; // 3 minutes (contact submissions change frequently)
 
   constructor(
     private readonly db: DatabaseService,
-    private readonly cache: CacheService,
   ) {}
 
   async create(dto: CreateContactSubmissionDto) {
@@ -25,9 +22,6 @@ export class ContactSubmissionsService {
         customFields: dto.customFields ? JSON.stringify(dto.customFields) : null,
       },
     });
-
-    // Invalidate cache
-    await this.cache.delPattern('contact-submissions:*');
 
     return {
       status: true,
@@ -53,13 +47,6 @@ export class ContactSubmissionsService {
       const limit = paginationDto.limit ?? 10;
       const skip = (page - 1) * limit;
 
-      const cacheKey = `contact-submissions:paginated:${page}:${limit}`;
-      const cached = await this.cache.get(cacheKey);
-      if (cached) {
-        this.logger.debug(`Cache hit for ${cacheKey}`);
-        return cached;
-      }
-
       const [data, total] = await Promise.all([
         this.db.contactSubmission.findMany({
           skip,
@@ -73,6 +60,7 @@ export class ContactSubmissionsService {
             subject: true,
             message: true,
             customFields: true,
+            isRead: true,
             createdAt: true,
           },
         }),
@@ -101,16 +89,7 @@ export class ContactSubmissionsService {
         },
       };
 
-      await this.cache.set(cacheKey, result, this.CACHE_TTL);
       return result;
-    }
-
-    // Return all results if no pagination
-    const cacheKey = 'contact-submissions:all';
-    const cached = await this.cache.get(cacheKey);
-    if (cached) {
-      this.logger.debug(`Cache hit for ${cacheKey}`);
-      return cached;
     }
 
     const data = await this.db.contactSubmission.findMany({ 
@@ -139,7 +118,6 @@ export class ContactSubmissionsService {
       data: parsedData,
     };
 
-    await this.cache.set(cacheKey, result, this.CACHE_TTL);
     return result;
   }
 
@@ -172,13 +150,90 @@ export class ContactSubmissionsService {
 
     await this.db.contactSubmission.delete({ where: { id } });
 
-    // Invalidate cache
-    await this.cache.delPattern('contact-submissions:*');
-
     return {
       status: true,
       code: 200,
       message: 'Contact submission deleted successfully',
+    };
+  }
+
+  async getUnreadCount() {
+    const count = await this.db.contactSubmission.count({
+      where: { isRead: false },
+    });
+
+    const result = {
+      status: true,
+      code: 200,
+      data: { count },
+    };
+
+    return result;
+  }
+
+  async getUnreadSubmissions(limit: number = 5) {
+    const data = await this.db.contactSubmission.findMany({
+      where: { isRead: false },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        subject: true,
+        message: true,
+        customFields: true,
+        createdAt: true,
+        isRead: true,
+      },
+    });
+
+    const parsedData = data.map(item => ({
+      ...item,
+      customFields: this.parseCustomFields(item.customFields),
+    }));
+
+    const result = {
+      status: true,
+      code: 200,
+      data: parsedData,
+    };
+
+    return result;
+  }
+
+  async markAsRead(id: number) {
+    const existing = await this.db.contactSubmission.findUnique({
+      where: { id },
+    });
+
+    if (!existing) {
+      throw new NotFoundException('Contact submission not found');
+    }
+
+    await this.db.contactSubmission.update({
+      where: { id },
+      data: { isRead: true },
+    });
+
+    return {
+      status: true,
+      code: 200,
+      message: 'Contact submission marked as read',
+    };
+  }
+
+  async markAllAsRead() {
+    await this.db.contactSubmission.updateMany({
+      where: { isRead: false },
+      data: { isRead: true },
+    });
+
+    return {
+      status: true,
+      code: 200,
+      message: 'All contact submissions marked as read',
     };
   }
 }

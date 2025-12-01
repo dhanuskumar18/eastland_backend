@@ -1,21 +1,30 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, ParseIntPipe, Query, BadRequestException, Req } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, ParseIntPipe, Query, BadRequestException, Req, Header } from '@nestjs/common';
 import type { Request } from 'express';
 import { TagsService } from './tags.service';
 import { TagForDto, CreateTagDto } from './dto/create-tag.dto';
 import { UpdateTagDto } from './dto/update-tag.dto';
 import { PaginationDto } from './dto/pagination.dto';
 import { SkipCsrf } from 'src/auth/csrf';
+import { SkipThrottle } from '@nestjs/throttler';
+
 @SkipCsrf()
+@SkipThrottle() // Skip throttling for public tag listings
 @Controller('tags')
 export class TagsController {
   constructor(private readonly tagsService: TagsService) {}
 
   @Post()
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+  @Header('Pragma', 'no-cache')
+  @Header('Expires', '0')
   create(@Body() dto: CreateTagDto) {
     return this.tagsService.create(dto);
   }
 
   @Get()
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+  @Header('Pragma', 'no-cache')
+  @Header('Expires', '0')
   findAll(
     @Query('for') forType?: TagForDto,
     @Query('page', new ParseIntPipe({ optional: true })) page?: number,
@@ -35,6 +44,9 @@ export class TagsController {
   }
 
   @Get(':id')
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+  @Header('Pragma', 'no-cache')
+  @Header('Expires', '0')
   findOne(
     @Param('id', ParseIntPipe) id: number,
     @Query('for') forType: TagForDto,
@@ -44,6 +56,9 @@ export class TagsController {
   }
 
   @Patch(':id')
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+  @Header('Pragma', 'no-cache')
+  @Header('Expires', '0')
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateTagDto,
@@ -52,6 +67,9 @@ export class TagsController {
   }
 
   @Delete(':id')
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+  @Header('Pragma', 'no-cache')
+  @Header('Expires', '0')
   remove(
     @Param('id', ParseIntPipe) id: number,
     @Query('for') forType: TagForDto,

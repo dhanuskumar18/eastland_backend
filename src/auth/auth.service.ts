@@ -1284,6 +1284,97 @@ export class AuthService {
   }
 
   /**
+   * GDPR: Get all personal data for a user (data access request)
+   * COMPLIANCE CHECKLIST ITEM #14.1: Users can request access to their personal data
+   */
+  async getUserData(userId: number) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        role: true,
+        sessions: {
+          where: { isActive: true },
+          select: {
+            id: true,
+            deviceInfo: true,
+            ipAddress: true,
+            userAgent: true,
+            createdAt: true,
+            lastUsed: true,
+            expiresAt: true,
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Return user data (excluding sensitive fields like password hashes)
+    return {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      status: user.status,
+      role: user.role?.name,
+      mfaEnabled: user.mfaEnabled,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+      passwordChangedAt: user.passwordChangedAt,
+      sessions: user.sessions,
+    };
+  }
+
+  /**
+   * GDPR: Delete user's own account (right to be forgotten)
+   * COMPLIANCE CHECKLIST ITEM #14.3: Users can request deletion of their personal data
+   */
+  async deleteOwnAccount(userId: number, password: string, req?: Request) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { role: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Require password verification for account deletion
+    const pwMatches = await argon.verify(user.password, password);
+    if (!pwMatches) {
+      throw new ForbiddenException('Password is incorrect. Please verify your password to delete your account.');
+    }
+
+    // Revoke all sessions first
+    await this.sessionService.revokeAllUserSessions(userId);
+
+    // Delete user account
+    await this.prisma.user.delete({
+      where: { id: userId },
+    });
+
+    // AUDIT LOG: User deleted their own account
+    await this.auditLog.logSuccess({
+      userId: userId,
+      action: AuditAction.USER_DELETED,
+      resource: 'User',
+      resourceId: userId,
+      details: {
+        deletedBy: 'self',
+        email: user.email,
+        name: user.name,
+      },
+      ipAddress: req?.ip,
+      userAgent: req?.get('user-agent'),
+    });
+
+    return {
+      message: 'Your account has been permanently deleted. All your personal data has been removed.',
+    };
+  }
+
+  /**
    * Check if login is from a new device
    */
   private isNewDeviceLogin(newSession: any, existingSessions: any[]): boolean {

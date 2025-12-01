@@ -1,25 +1,53 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { CreateSectionDto, SectionTranslationInput } from './dto/create-section.dto';
 import { UpdateSectionDto } from './dto/update-section.dto';
 import { PaginationDto } from './dto/pagination.dto';
+import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class SectionsService {
   constructor(private readonly db: DatabaseService) {}
 
-  create(dto: CreateSectionDto) {
+  async create(dto: CreateSectionDto) {
     const { name, pageId, translations } = dto;
-    return this.db.section.create({
-      data: {
-        name,
-        pageId,
-        translations: translations && translations.length > 0 ? {
-          create: translations.map((t) => ({ locale: t.locale, content: t.content }))
-        } : undefined,
-      },
-      include: { translations: true },
-    });
+    
+    // Check if page exists
+    const page = await this.db.page.findUnique({ where: { id: pageId }, select: { id: true } });
+    if (!page) {
+      throw new NotFoundException(`Page with id ${pageId} not found`);
+    }
+
+    try {
+      return await this.db.section.create({
+        data: {
+          name,
+          pageId,
+          translations: translations && translations.length > 0 ? {
+            create: translations.map((t) => ({ locale: t.locale, content: t.content }))
+          } : undefined,
+        },
+        include: { translations: true },
+      });
+    } catch (error) {
+      // Handle Prisma unique constraint violations
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (error.code === 'P2002') {
+          // Unique constraint violation
+          const target = error.meta?.target as string[] | undefined;
+          if (target?.includes('pageId') && target?.includes('name')) {
+            throw new ConflictException(`A section with the name "${name}" already exists on this page`);
+          }
+          throw new ConflictException('A section with these values already exists');
+        }
+        if (error.code === 'P2003') {
+          // Foreign key constraint violation
+          throw new BadRequestException(`Invalid pageId: Page with id ${pageId} does not exist`);
+        }
+      }
+      // Re-throw if it's not a handled Prisma error
+      throw error;
+    }
   }
 
   async findAll(paginationDto?: PaginationDto) {

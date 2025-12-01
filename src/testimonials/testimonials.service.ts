@@ -3,6 +3,7 @@ import { DatabaseService } from '../database/database.service';
 import { CreateTestimonialDto } from './dto/create-testimonial.dto';
 import { UpdateTestimonialDto } from './dto/update-testimonial.dto';
 import { PaginationDto } from './dto/pagination.dto';
+import { TestimonialFilterDto } from './dto/filter.dto';
 import { UploadService } from '../upload/upload.service';
 
 @Injectable()
@@ -30,7 +31,19 @@ export class TestimonialsService {
     };
   }
 
-  async findAll(paginationDto?: PaginationDto) {
+  async findAll(paginationDto?: PaginationDto, filterDto?: TestimonialFilterDto) {
+    // Build where clause for filtering
+    const where: any = {};
+
+    if (filterDto?.search) {
+      const searchLower = filterDto.search.toLowerCase();
+      where.OR = [
+        { clientName: { contains: searchLower, mode: 'insensitive' } },
+        { profession: { contains: searchLower, mode: 'insensitive' } },
+        { review: { contains: searchLower, mode: 'insensitive' } },
+      ];
+    }
+
     // If pagination is provided, return paginated results
     if (paginationDto && (paginationDto.page !== undefined || paginationDto.limit !== undefined)) {
       const page = paginationDto.page ?? 1;
@@ -39,11 +52,12 @@ export class TestimonialsService {
 
       const [data, total] = await Promise.all([
         this.db.testimonial.findMany({
+          where,
           skip,
           take: limit,
           orderBy: { id: 'desc' },
         }),
-        this.db.testimonial.count(),
+        this.db.testimonial.count({ where }),
       ]);
 
       const totalPages = Math.ceil(total / limit);
@@ -64,7 +78,10 @@ export class TestimonialsService {
     }
 
     // Return all results if no pagination
-    const data = await this.db.testimonial.findMany({ orderBy: { id: 'desc' } });
+    const data = await this.db.testimonial.findMany({
+      where,
+      orderBy: { id: 'desc' },
+    });
     return {
       status: true,
       code: 200,

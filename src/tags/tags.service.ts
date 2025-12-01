@@ -3,7 +3,6 @@ import { DatabaseService } from '../database/database.service';
 import { TagForDto, CreateTagDto } from './dto/create-tag.dto';
 import { UpdateTagDto } from './dto/update-tag.dto';
 import { PaginationDto } from './dto/pagination.dto';
-import { CacheService } from '../common/cache/cache.service';
 
 // Temporary type until migration is run and Prisma generates the enum
 type TagType = 'VIDEO' | 'PRODUCT';
@@ -14,11 +13,9 @@ type TagWithType = { id: number; name: string; type: TagType };
 @Injectable()
 export class TagsService {
   private readonly logger = new Logger(TagsService.name);
-  private readonly CACHE_TTL = 600; // 10 minutes
 
   constructor(
     private readonly db: DatabaseService,
-    private readonly cache: CacheService,
   ) {}
 
   async create(dto: CreateTagDto) {
@@ -29,9 +26,6 @@ export class TagsService {
         type: type as any
       } as any
     });
-
-    // Invalidate cache
-    await this.cache.delPattern('tags:*');
 
     return tag;
   }
@@ -44,13 +38,6 @@ export class TagsService {
       const page = paginationDto.page ?? 1;
       const limit = paginationDto.limit ?? 10;
       const skip = (page - 1) * limit;
-
-      const cacheKey = `tags:paginated:${filterFor || 'all'}:${page}:${limit}`;
-      const cached = await this.cache.get(cacheKey);
-      if (cached) {
-        this.logger.debug(`Cache hit for ${cacheKey}`);
-        return cached;
-      }
 
       const [tags, total] = await Promise.all([
         this.db.tag.findMany({
@@ -80,16 +67,7 @@ export class TagsService {
         },
       };
 
-      await this.cache.set(cacheKey, result, this.CACHE_TTL);
       return result;
-    }
-
-    // Return all results if no pagination
-    const cacheKey = `tags:all:${filterFor || 'all'}`;
-    const cached = await this.cache.get(cacheKey);
-    if (cached) {
-      this.logger.debug(`Cache hit for ${cacheKey}`);
-      return cached;
     }
 
     const tags = await this.db.tag.findMany({
@@ -103,7 +81,6 @@ export class TagsService {
       for: this.mapTypeToFor(tag.type as TagType),
     }));
 
-    await this.cache.set(cacheKey, result, this.CACHE_TTL);
     return result;
   }
 
@@ -141,9 +118,6 @@ export class TagsService {
 
     const updated = await this.db.tag.update({ where: { id }, data });
 
-    // Invalidate cache
-    await this.cache.delPattern('tags:*');
-
     return updated;
   }
 
@@ -152,9 +126,6 @@ export class TagsService {
     await this.ensureExists(id, type);
     
     const result = await this.db.tag.delete({ where: { id } });
-
-    // Invalidate cache
-    await this.cache.delPattern('tags:*');
 
     return result;
   }

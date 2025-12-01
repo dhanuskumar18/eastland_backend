@@ -62,3 +62,9 @@ export class VerifyLoginMfaDto {
   token: string;
 }
 
+export class DeleteAccountDto {
+  @IsString()
+  @IsNotEmpty()
+  password: string;
+}
+

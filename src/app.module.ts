@@ -9,6 +9,7 @@ import { UserModule } from './user/user.module';
 import { DatabaseModule } from './database/database.module';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { PublicThrottlerGuard } from './common/guards/public-throttler.guard';
 import { ScheduleModule } from '@nestjs/schedule';
 import { APP_GUARD, APP_FILTER } from '@nestjs/core';
 import { DoubleSubmitCsrfGuard } from './auth/csrf/csrf.guard';
@@ -93,7 +94,7 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
     },
     {
       provide: APP_GUARD,
-      useClass: ThrottlerGuard,
+      useClass: PublicThrottlerGuard,
     },
     {
       provide: APP_GUARD,

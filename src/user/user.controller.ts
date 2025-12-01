@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, ParseIntPipe, Query, Req, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, ParseIntPipe, Query, Req, UseGuards, HttpCode, HttpStatus, Header } from '@nestjs/common';
 import type { User } from '@prisma/client';
 import type { Request } from 'express';
 import { JwtGuard, RolesGuard } from 'src/auth/guard';
@@ -25,22 +25,36 @@ export class UserController {
   @UseGuards(JwtGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @Post()
-  create(
+  @HttpCode(HttpStatus.CREATED)
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+  @Header('Pragma', 'no-cache')
+  @Header('Expires', '0')
+  async create(
     @Body() dto: CreateUserDto,
     @GetUser() user: User,
     @Req() req: Request,
   ) {
-    return this.userService.create(
+    const data = await this.userService.create(
       dto,
       user.id,
       req.ip,
       req.get('user-agent'),
     );
+    return {
+      version: '1',
+      code: HttpStatus.CREATED,
+      status: true,
+      message: 'User created successfully',
+      data,
+    };
   }
 
   @UseGuards(JwtGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @Get()
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+  @Header('Pragma', 'no-cache')
+  @Header('Expires', '0')
   findAll(
     @Query() paginationDto?: PaginationDto,
     @Req() req?: Request,
@@ -53,49 +67,82 @@ export class UserController {
   @UseGuards(JwtGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @Get(':id')
-  findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.userService.findOne(id);
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+  @Header('Pragma', 'no-cache')
+  @Header('Expires', '0')
+  async findOne(@Param('id', ParseIntPipe) id: number) {
+    const data = await this.userService.findOne(id);
+    return {
+      version: '1',
+      code: HttpStatus.OK,
+      status: true,
+      message: 'OK',
+      data,
+    };
   }
 
   @UseGuards(JwtGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @Patch(':id/status')
-  toggleStatus(
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+  @Header('Pragma', 'no-cache')
+  @Header('Expires', '0')
+  async toggleStatus(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: ToggleStatusDto,
     @GetUser() user: User,
     @Req() req: Request,
   ) {
-    return this.userService.toggleStatus(
+    const data = await this.userService.toggleStatus(
       id,
       dto,
       user.id,
       req.ip,
       req.get('user-agent'),
     );
+    return {
+      version: '1',
+      code: HttpStatus.OK,
+      status: true,
+      message: 'User status updated successfully',
+      data,
+    };
   }
 
   @UseGuards(JwtGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @Patch(':id')
-  update(
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+  @Header('Pragma', 'no-cache')
+  @Header('Expires', '0')
+  async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateUserDto,
     @GetUser() user: User,
     @Req() req: Request,
   ) {
-    return this.userService.update(
+    const data = await this.userService.update(
       id,
       dto,
       user.id,
       req.ip,
       req.get('user-agent'),
     );
+    return {
+      version: '1',
+      code: HttpStatus.OK,
+      status: true,
+      message: 'User updated successfully',
+      data,
+    };
   }
 
   @UseGuards(JwtGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @Delete(':id')
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+  @Header('Pragma', 'no-cache')
+  @Header('Expires', '0')
   remove(
     @Param('id', ParseIntPipe) id: number,
     @GetUser() user: User,
