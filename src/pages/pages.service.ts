@@ -17,8 +17,29 @@ export class PagesService {
   }
 
   async findAll(paginationDto?: PaginationDto) {
-    const page = paginationDto?.page ?? 1;
-    const limit = paginationDto?.limit ?? 10;
+    // Detect if pagination was explicitly requested
+    const hasPaginationParams =
+      paginationDto &&
+      (paginationDto.page !== undefined || paginationDto.limit !== undefined);
+
+    // If no pagination params, return all pages with all sections
+    if (!hasPaginationParams) {
+      const data = await this.db.page.findMany({
+        orderBy: { id: 'desc' },
+        include: { sections: true },
+      });
+
+      return {
+        data,
+        meta: {
+          total: data.length,
+        },
+      };
+    }
+
+    // Apply pagination if page / limit are provided
+    const page = paginationDto.page ?? 1;
+    const limit = paginationDto.limit ?? 10;
     const skip = (page - 1) * limit;
 
     const [data, total] = await Promise.all([

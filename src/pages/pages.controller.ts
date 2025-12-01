@@ -25,8 +25,10 @@ export class PagesController {
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   @Header('Pragma', 'no-cache')
   @Header('Expires', '0')
-  findAll(@Query() paginationDto: PaginationDto) {
-    return this.pagesService.findAll(paginationDto);
+  findAll(@Query() paginationDto: PaginationDto, @Req() req: Request) {
+    // Only enable pagination when page or limit query params are actually provided
+    const hasPaginationParams = req.query?.page !== undefined || req.query?.limit !== undefined;
+    return this.pagesService.findAll(hasPaginationParams ? paginationDto : undefined);
   }
 
   @Get('slug/:slug')
