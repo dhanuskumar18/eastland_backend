@@ -108,20 +108,6 @@ export class SeoController {
     }
   }
 
-  @Post('lazy-loading')
-  @Header('Cache-Control', 'no-store')
-  async saveLazyLoadingSettings(@Body() dto: LazyLoadingSettingsDto) {
-    try {
-      const data = await this.seoService.saveLazyLoadingSettings(dto);
-      return {
-        success: true,
-        message: 'Lazy loading settings saved successfully',
-        data,
-      };
-    } catch (error) {
-      throw error;
-    }
-  }
 
   @Get('lazy-loading/sections')
   @Header('Cache-Control', 'no-cache, must-revalidate')
@@ -142,6 +128,22 @@ export class SeoController {
       throw error;
     }
   }
+
+  @Post('lazy-loading')
+  @Header('Cache-Control', 'no-store')
+  async saveLazyLoadingSettings(@Body() dto: LazyLoadingSettingsDto) {
+    try {
+      const data = await this.seoService.saveLazyLoadingSettings(dto);
+      return {
+        success: true,
+        message: 'Lazy loading settings saved successfully',
+        data,
+      };
+    } catch (error) {
+      throw error;
+    }
+  }
+
 
   @Post('lazy-loading/sections')
   @Header('Cache-Control', 'no-store')
