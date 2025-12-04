@@ -5,10 +5,10 @@ import { CreatePageDto } from './dto/create-page.dto';
 import { UpdatePageDto } from './dto/update-page.dto';
 import { PaginationDto } from './dto/pagination.dto';
 import { SkipCsrf } from 'src/auth/csrf';
-import { SkipThrottle } from '@nestjs/throttler';
+// import { SkipThrottle } from '@nestjs/throttler';
 
 @SkipCsrf()
-@SkipThrottle() // Skip throttling for all methods in this controller
+// @SkipThrottle() // Skip throttling for all methods in this controller - COMMENTED OUT FOR NOW
 @Controller('pages')
 export class PagesController {
   constructor(private readonly pagesService: PagesService) {}
@@ -32,7 +32,7 @@ export class PagesController {
   }
 
   @Get('slug/:slug')
-  @SkipThrottle() // Ensure slug endpoint skips throttling
+  // @SkipThrottle() // Ensure slug endpoint skips throttling - COMMENTED OUT FOR NOW
   findBySlug(
     @Param('slug') slug: string,
     @Query() paginationDto: PaginationDto,

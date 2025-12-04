@@ -22,12 +22,12 @@ export class PublicThrottlerGuard extends ThrottlerGuard {
         '/api/seo',
         '/youtube-videos',
         '/testimonials',
-        '/pages',
+        // '/pages', // COMMENTED OUT FOR NOW - pages edit section should be throttled
         '/categories',
         '/tags',
         '/brands',
         '/globals',
-        '/sections',
+        // '/sections', // COMMENTED OUT FOR NOW - sections edit operations should be throttled
       ];
 
       const isPublicEndpoint = publicEndpoints.some(endpoint =>
