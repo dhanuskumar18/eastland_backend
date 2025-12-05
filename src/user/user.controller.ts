@@ -4,6 +4,7 @@ import type { Request } from 'express';
 import { JwtGuard, RolesGuard } from 'src/auth/guard';
 import { GetUser, Roles } from 'src/auth/decorator';
 import { UserService } from './user.service';
+import { RolesService } from '../roles/roles.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { ToggleStatusDto } from './dto/toggle-status.dto';
@@ -14,12 +15,48 @@ import { UserRole } from '@prisma/client';
 @SkipCsrf()
 @Controller('users')
 export class UserController {
-  constructor(private readonly userService: UserService) {}
+  constructor(
+    private readonly userService: UserService,
+    private readonly rolesService: RolesService,
+  ) {}
 
   @UseGuards(JwtGuard)    
   @Get('me')
-  getMe(@GetUser() user: User) {
-    return user;
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+  @Header('Pragma', 'no-cache')
+  @Header('Expires', '0')
+  async getMe(@GetUser() user: User) {
+    return {
+      version: '1',
+      code: HttpStatus.OK,
+      status: true,
+      message: 'OK',
+      data: user,
+    };
+  }
+
+  @UseGuards(JwtGuard)
+  @Get('me/permissions')
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+  @Header('Pragma', 'no-cache')
+  @Header('Expires', '0')
+  async getMyPermissions(@GetUser() user: User) {
+    // Get permission strings for frontend
+    const permissions = await this.rolesService.getUserPermissions(user.id);
+    
+    // Get role name from user object (role is included by JWT strategy)
+    const roleName = (user as any).role?.name || null;
+    
+    return {
+      version: '1',
+      code: HttpStatus.OK,
+      status: true,
+      message: 'OK',
+      data: {
+        permissions, // Array of permission strings like ['user:create', 'user:read']
+        role: roleName,
+      },
+    };
   }
 
   @UseGuards(JwtGuard, RolesGuard)

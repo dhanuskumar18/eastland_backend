@@ -671,5 +671,22 @@ export class RolesService {
 
     return user.role.permissions.map((rp) => rp.permission);
   }
+
+  /**
+   * Get all permissions for a user as strings (for frontend use)
+   * Returns a flat array of permission strings in format: 'resource:action'
+   * Also supports wildcard permissions like 'resource:*' or '*:*'
+   */
+  async getUserPermissions(userId: number): Promise<string[]> {
+    const permissions = await this.getUserPermissionsWithDetails(userId);
+    
+    // Extract unique permissions from role
+    const permissionStrings = permissions.map(
+      (p) => `${p.resource}:${p.action}`,
+    );
+
+    // Remove duplicates
+    return [...new Set(permissionStrings)];
+  }
 }
 
