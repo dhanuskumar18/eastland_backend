@@ -211,6 +211,7 @@ export class RolesController {
 
   @UseGuards(JwtGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
+  @SkipThrottle()
   @Get()
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   @Header('Pragma', 'no-cache')
