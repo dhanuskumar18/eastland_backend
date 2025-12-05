@@ -4,6 +4,8 @@ import { PassportStrategy } from "@nestjs/passport";
 import { ExtractJwt, Strategy } from "passport-jwt";
 import { DatabaseService } from "src/database/database.service";
 import { SessionService } from "../../session/session.service";
+import { RolesService } from "../../roles/roles.service";
+import { AbilityFactory } from "../../common/services/ability.factory";
 import { Request } from "express";
 
 @Injectable()
@@ -12,6 +14,8 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
         config: ConfigService,
         private prisma: DatabaseService,
         private sessionService: SessionService,
+        private rolesService: RolesService,
+        private abilityFactory: AbilityFactory,
     ) {
         super({
             // Security: Session tokens are NEVER extracted from URL parameters
@@ -32,7 +36,17 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
 
         const user = await this.prisma.user.findUnique({
             where: { id: payload.sub },
-            include: { role: true },
+            include: {
+                role: {
+                    include: {
+                        permissions: {
+                            include: {
+                                permission: true,
+                            },
+                        },
+                    },
+                },
+            },
         });
 
         if (!user) {
@@ -90,10 +104,17 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
             }
         }
 
-        // Add session info to user object for easy access
+        // Create CASL ability for the user (this loads permissions internally)
+        const ability = await this.abilityFactory.createForUser(user.id);
+
+        // Set ability on request for easy access in guards and controllers
+        req.ability = ability;
+
+        // Add session info and CASL ability to user object
         return {
             ...user,
             sessionId: payload.jti,
+            ability, // CASL ability object for authorization checks
         };
     }
 }

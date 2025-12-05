@@ -9,12 +9,14 @@ import { SessionModule } from "../session/session.module";
 import { EmailModule } from "../email/email.module";
 import { CsrfService } from "./csrf";
 import { DatabaseModule } from "../database/database.module";
+import { RolesModule } from "../roles/roles.module";
 
 @Module({
     imports:[
         forwardRef(() => SessionModule), // Use forwardRef to break circular dependency
         EmailModule, // Import the email module
         DatabaseModule, // Import database module for UserStatusGuard
+        RolesModule, // Import roles module for permission loading
         JwtModule.registerAsync({
             imports: [ConfigModule],
             useFactory: async (config: ConfigService) => ({
