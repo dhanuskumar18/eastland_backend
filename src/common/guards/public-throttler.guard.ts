@@ -3,8 +3,8 @@ import { ThrottlerGuard } from '@nestjs/throttler';
 
 /**
  * Custom ThrottlerGuard that skips throttling for:
- * 1. GET requests to public endpoints (products, videos, testimonials, pages, etc.)
- * 2. Endpoints decorated with @SkipThrottle() (handled by parent class)
+ * 1. Endpoints decorated with @SkipThrottle() (handled by parent class)
+ * 2. GET requests to public endpoints (products, videos, testimonials, pages, etc.)
  * 3. All GET requests to public read-only endpoints
  */
 @Injectable()
@@ -13,8 +13,9 @@ export class PublicThrottlerGuard extends ThrottlerGuard {
     const request = context.switchToHttp().getRequest();
 
     // Skip throttling for GET requests to public endpoints
+    // Check path without query parameters
     if (request.method === 'GET') {
-      const path = request.path?.toLowerCase() || '';
+      const path = (request.path || request.url || '').toLowerCase().split('?')[0];
       
       // List of public endpoints that should not be throttled
       const publicEndpoints = [
@@ -27,11 +28,12 @@ export class PublicThrottlerGuard extends ThrottlerGuard {
         '/tags',
         '/brands',
         '/globals',
+        '/roles/permissions/all', // Skip throttling for permissions list (admin endpoint)
         // '/sections', // COMMENTED OUT FOR NOW - sections edit operations should be throttled
       ];
 
       const isPublicEndpoint = publicEndpoints.some(endpoint =>
-        path.startsWith(endpoint),
+        path === endpoint || path.startsWith(endpoint + '/'),
       );
 
       if (isPublicEndpoint) {
@@ -40,6 +42,7 @@ export class PublicThrottlerGuard extends ThrottlerGuard {
     }
 
     // For all other requests, apply normal throttling (includes @SkipThrottle() check)
+    // The parent class will check for @SkipThrottle() decorator automatically
     return super.canActivate(context);
   }
 }

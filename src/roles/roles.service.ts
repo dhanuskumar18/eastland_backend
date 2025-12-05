@@ -224,9 +224,26 @@ export class RolesService {
     } catch (error) {
       if (error instanceof PrismaClientKnownRequestError) {
         if (error.code === 'P2002') {
-          throw new BadRequestException('Role name already exists');
+          const newName = data.name || dto.name;
+          throw new BadRequestException(
+            `Role name "${newName}" already exists. Please choose a different name.`,
+          );
+        } else if (error.code === 'P2003') {
+          throw new BadRequestException('Foreign key constraint violation');
+        } else {
+          this.logger.error(
+            `Failed to update role ${id}`,
+            error instanceof Error ? error.stack : error,
+          );
+          throw new BadRequestException(`Database error: ${error.message}`);
         }
       }
+      
+      // Log unexpected errors
+      this.logger.error(
+        `Unexpected error updating role ${id}`,
+        error instanceof Error ? error.stack : error,
+      );
       throw error;
     }
   }
@@ -433,6 +450,197 @@ export class RolesService {
     }
   }
 
+  async createPermissionsBatch(
+    dtos: CreatePermissionDto[],
+    performedBy?: number,
+    ipAddress?: string,
+    userAgent?: string,
+  ) {
+    type PermissionWithCount = Awaited<
+      ReturnType<typeof this.db.permission.create>
+    > & {
+      _count: { roles: number };
+    };
+    type FailedPermission = {
+      permission: CreatePermissionDto;
+      error: string;
+    };
+
+    const results: PermissionWithCount[] = [];
+    const errors: FailedPermission[] = [];
+
+    // Use transaction for atomicity - all succeed or all fail
+    try {
+      const created = await this.db.$transaction(
+        dtos.map((dto) =>
+          this.db.permission.create({
+            data: {
+              name: dto.name,
+              resource: dto.resource,
+              action: dto.action,
+              description: dto.description,
+            },
+            include: {
+              _count: {
+                select: {
+                  roles: true,
+                },
+              },
+            },
+          }),
+        ),
+      );
+
+      // Log audit for each created permission
+      for (const permission of created) {
+        await this.auditLog.logSuccess({
+          userId: performedBy,
+          action: AuditAction.RESOURCE_CREATED,
+          resource: 'Permission',
+          resourceId: permission.id,
+          details: {
+            permissionName: permission.name,
+            resource: permission.resource,
+            action: permission.action,
+            batchOperation: true,
+          },
+          ipAddress,
+          userAgent,
+        });
+        results.push(permission);
+      }
+
+      return {
+        success: results,
+        failed: [] as FailedPermission[],
+        total: dtos.length,
+        created: results.length,
+      };
+    } catch (error) {
+      // Log the transaction error for debugging
+      this.logger.error(
+        `Batch permission creation transaction failed. Attempting individual creates.`,
+        error instanceof Error ? error.stack : error,
+      );
+      
+      // If transaction fails, try individual creates to identify which ones fail
+      for (const dto of dtos) {
+        try {
+          const permission = await this.db.permission.create({
+            data: {
+              name: dto.name,
+              resource: dto.resource,
+              action: dto.action,
+              description: dto.description,
+            },
+            include: {
+              _count: {
+                select: {
+                  roles: true,
+                },
+              },
+            },
+          });
+
+          await this.auditLog.logSuccess({
+            userId: performedBy,
+            action: AuditAction.RESOURCE_CREATED,
+            resource: 'Permission',
+            resourceId: permission.id,
+            details: {
+              permissionName: permission.name,
+              resource: permission.resource,
+              action: permission.action,
+              batchOperation: true,
+            },
+            ipAddress,
+            userAgent,
+          });
+
+          results.push(permission);
+        } catch (individualError) {
+          let errorMessage = 'Failed to create permission';
+          
+          if (individualError instanceof PrismaClientKnownRequestError) {
+            if (individualError.code === 'P2002') {
+              // Check which field caused the unique constraint violation
+              const target = individualError.meta?.target;
+              if (Array.isArray(target)) {
+                if (target.includes('name')) {
+                  errorMessage = `Permission name "${dto.name}" already exists`;
+                } else if (target.includes('resource') && target.includes('action')) {
+                  errorMessage = `Permission with resource "${dto.resource}" and action "${dto.action}" already exists`;
+                } else {
+                  errorMessage = 'Permission already exists (unique constraint violation)';
+                }
+              } else {
+                errorMessage = 'Permission name already exists or resource-action combination already exists';
+              }
+            } else if (individualError.code === 'P2003') {
+              errorMessage = 'Foreign key constraint violation';
+            } else {
+              errorMessage = `Database error: ${individualError.message}`;
+            }
+          } else if (individualError instanceof Error) {
+            // Capture validation errors or other errors
+            errorMessage = individualError.message || 'Failed to create permission';
+          }
+          
+          this.logger.error(
+            `Failed to create permission: ${dto.name} (${dto.resource}:${dto.action})`,
+            individualError instanceof Error ? individualError.stack : individualError,
+          );
+          
+          errors.push({
+            permission: dto,
+            error: errorMessage,
+          });
+        }
+      }
+
+      if (errors.length > 0 && results.length === 0) {
+        // Create a detailed error message
+        const errorDetails = errors.map((e, index) => ({
+          index: index + 1,
+          permission: {
+            name: e.permission.name,
+            resource: e.permission.resource,
+            action: e.permission.action,
+          },
+          error: e.error,
+        }));
+        
+        // Create summary message
+        const uniqueErrors = [...new Set(errors.map(e => e.error))];
+        const errorSummary = uniqueErrors.length <= 3 
+          ? uniqueErrors.join(', ')
+          : `${uniqueErrors.slice(0, 3).join(', ')} and ${uniqueErrors.length - 3} more error types`;
+        
+        const exception = new BadRequestException(
+          `Failed to create any permissions: ${errorSummary}`,
+        );
+        
+        // Attach detailed error information
+        (exception as any).response = {
+          message: `Failed to create any permissions: ${errorSummary}`,
+          errors: errorDetails,
+          total: dtos.length,
+          failed: errors.length,
+        };
+        
+        throw exception;
+      }
+
+      return {
+        success: results,
+        failed: errors,
+        total: dtos.length,
+        created: results.length,
+        failedCount: errors.length,
+      };
+    }
+  }
+
   async findAllPermissions(paginationDto?: PaginationDto) {
     if (paginationDto && (paginationDto.page !== undefined || paginationDto.limit !== undefined)) {
       const page = paginationDto.page ?? 1;
@@ -562,6 +770,52 @@ export class RolesService {
       return this.findOnePermission(id);
     }
 
+    // Check for duplicate resource-action combination before updating
+    if (data.resource !== undefined || data.action !== undefined) {
+      const newResource = data.resource !== undefined ? data.resource : existing.resource;
+      const newAction = data.action !== undefined ? data.action : existing.action;
+      
+      // Check if another permission (not this one) already has this combination
+      const duplicatePermission = await this.db.permission.findFirst({
+        where: {
+          resource: newResource,
+          action: newAction,
+          id: { not: id }, // Exclude the current permission
+        },
+        select: {
+          id: true,
+          name: true,
+        },
+      });
+      
+      if (duplicatePermission) {
+        throw new BadRequestException(
+          `Permission with resource "${newResource}" and action "${newAction}" already exists (Permission ID: ${duplicatePermission.id}, Name: "${duplicatePermission.name}"). This combination is already in use.`,
+        );
+      }
+    }
+
+    // Check for duplicate name before updating
+    if (data.name !== undefined) {
+      const duplicateName = await this.db.permission.findFirst({
+        where: {
+          name: data.name,
+          id: { not: id }, // Exclude the current permission
+        },
+        select: {
+          id: true,
+          resource: true,
+          action: true,
+        },
+      });
+      
+      if (duplicateName) {
+        throw new BadRequestException(
+          `Permission name "${data.name}" already exists (Permission ID: ${duplicateName.id}, Resource: "${duplicateName.resource}", Action: "${duplicateName.action}"). Please choose a different name.`,
+        );
+      }
+    }
+
     try {
       const updated = await this.db.permission.update({
         where: { id },
@@ -589,11 +843,65 @@ export class RolesService {
     } catch (error) {
       if (error instanceof PrismaClientKnownRequestError) {
         if (error.code === 'P2002') {
-          throw new BadRequestException(
-            'Permission name already exists or resource-action combination already exists',
+          // Check which field caused the unique constraint violation
+          const target = error.meta?.target;
+          const errorMessage = error.message || '';
+          let errorMessageToReturn = 'Permission already exists';
+          
+          // Determine which constraint was violated based on error message and data being updated
+          const isResourceActionConstraint = 
+            errorMessage.includes('resource') && errorMessage.includes('action') ||
+            (Array.isArray(target) && target.includes('resource') && target.includes('action')) ||
+            (data.resource !== undefined || data.action !== undefined);
+          
+          const isNameConstraint = 
+            errorMessage.includes('name') ||
+            (Array.isArray(target) && target.includes('name')) ||
+            data.name !== undefined;
+          
+          if (isResourceActionConstraint) {
+            // Resource-action combination already exists
+            const newResource = data.resource !== undefined ? data.resource : existing.resource;
+            const newAction = data.action !== undefined ? data.action : existing.action;
+            errorMessageToReturn = `Permission with resource "${newResource}" and action "${newAction}" already exists. This combination is already in use by another permission.`;
+          } else if (isNameConstraint) {
+            // Name already exists
+            const newName = data.name || dto.name || existing.name;
+            errorMessageToReturn = `Permission name "${newName}" already exists. Please choose a different name.`;
+          } else {
+            // Generic fallback - check what was being updated
+            if (data.name !== undefined) {
+              errorMessageToReturn = `Permission name "${data.name}" already exists. Please choose a different name.`;
+            } else if (data.resource !== undefined || data.action !== undefined) {
+              const newResource = data.resource !== undefined ? data.resource : existing.resource;
+              const newAction = data.action !== undefined ? data.action : existing.action;
+              errorMessageToReturn = `Permission with resource "${newResource}" and action "${newAction}" already exists. This combination is already in use by another permission.`;
+            } else {
+              errorMessageToReturn = 'Permission already exists. The name or resource-action combination conflicts with an existing permission.';
+            }
+          }
+          
+          this.logger.warn(
+            `Unique constraint violation updating permission ${id}: ${errorMessageToReturn}`,
           );
+          
+          throw new BadRequestException(errorMessageToReturn);
+        } else if (error.code === 'P2003') {
+          throw new BadRequestException('Foreign key constraint violation');
+        } else {
+          this.logger.error(
+            `Failed to update permission ${id}`,
+            error instanceof Error ? error.stack : error,
+          );
+          throw new BadRequestException(`Database error: ${error.message}`);
         }
       }
+      
+      // Log unexpected errors
+      this.logger.error(
+        `Unexpected error updating permission ${id}`,
+        error instanceof Error ? error.stack : error,
+      );
       throw error;
     }
   }

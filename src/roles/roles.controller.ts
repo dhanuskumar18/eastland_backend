@@ -23,12 +23,15 @@ import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { AssignPermissionsDto } from './dto/assign-permissions.dto';
 import { CreatePermissionDto } from './dto/create-permission.dto';
+import { CreatePermissionsBatchDto } from './dto/create-permissions-batch.dto';
 import { UpdatePermissionDto } from './dto/update-permission.dto';
 import { PaginationDto } from '../brand/dto/pagination.dto';
 import { SkipCsrf } from 'src/auth/csrf';
 import { UserRole } from '@prisma/client';
+import { Throttle, SkipThrottle } from '@nestjs/throttler';
 
 @SkipCsrf()
+@Throttle({ medium: { limit: 100, ttl: 10000 } }) // 100 requests per 10 seconds for admin endpoints
 @Controller('roles')
 export class RolesController {
   constructor(private readonly rolesService: RolesService) {}
@@ -64,6 +67,34 @@ export class RolesController {
 
   @UseGuards(JwtGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
+  @Post('permissions/batch')
+  @HttpCode(HttpStatus.CREATED)
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+  @Header('Pragma', 'no-cache')
+  @Header('Expires', '0')
+  async createPermissionsBatch(
+    @Body() dto: CreatePermissionsBatchDto,
+    @GetUser() user: User,
+    @Req() req: Request,
+  ) {
+    const data = await this.rolesService.createPermissionsBatch(
+      dto.permissions,
+      user.id,
+      req.ip,
+      req.get('user-agent'),
+    );
+    return {
+      version: '1',
+      code: HttpStatus.CREATED,
+      status: true,
+      message: `Successfully created ${data.created} of ${data.total} permissions`,
+      data,
+    };
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @SkipThrottle()
   @Get('permissions/all')
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   @Header('Pragma', 'no-cache')
