@@ -4,12 +4,16 @@ import { CreateYouTubeVideoDto } from './dto/create-youtube-video.dto';
 import { UpdateYouTubeVideoDto } from './dto/update-youtube-video.dto';
 import { PaginationDto } from '../brand/dto/pagination.dto';
 import { YouTubeVideoFilterDto } from './dto/filter.dto';
+import { AuditLogService, AuditAction } from '../common/services/audit-log.service';
 
 @Injectable()
 export class YouTubeVideosService {
-  constructor(private readonly db: DatabaseService) {}
+  constructor(
+    private readonly db: DatabaseService,
+    private readonly auditLog: AuditLogService,
+  ) {}
 
-  async create(dto: CreateYouTubeVideoDto) {
+  async create(dto: CreateYouTubeVideoDto, performedBy?: number, ipAddress?: string, userAgent?: string) {
     // Validate brand exists
     const brand = await this.db.brand.findUnique({ where: { id: dto.brandId } });
     if (!brand) throw new NotFoundException('Brand not found');
@@ -73,7 +77,24 @@ export class YouTubeVideosService {
       },
     });
 
-    return this.formatYouTubeVideoResponse(youtubeVideo);
+    const formattedVideo = this.formatYouTubeVideoResponse(youtubeVideo);
+    
+    // Audit log: YouTube video created
+    await this.auditLog.logSuccess({
+      userId: performedBy,
+      action: AuditAction.RESOURCE_CREATED,
+      resource: 'YouTubeVideo',
+      resourceId: youtubeVideo.id,
+      details: {
+        name: dto.name,
+        youtubeLink: dto.youtubeLink,
+        brandId: dto.brandId,
+      },
+      ipAddress,
+      userAgent,
+    });
+
+    return formattedVideo;
   }
 
   private formatYouTubeVideoResponse(video: any) {
@@ -209,7 +230,7 @@ export class YouTubeVideosService {
     return this.formatYouTubeVideoResponse(youtubeVideo);
   }
 
-  async update(id: number, dto: UpdateYouTubeVideoDto) {
+  async update(id: number, dto: UpdateYouTubeVideoDto, performedBy?: number, ipAddress?: string, userAgent?: string) {
     const existing = await this.db.youTubeVideo.findUnique({
       where: { id },
       include: { categories: true, tags: true },
@@ -334,10 +355,25 @@ export class YouTubeVideosService {
       });
     }
 
-    return this.findOne(id);
+    const updatedVideo = await this.findOne(id);
+    
+    // Audit log: YouTube video updated
+    await this.auditLog.logSuccess({
+      userId: performedBy,
+      action: AuditAction.RESOURCE_UPDATED,
+      resource: 'YouTubeVideo',
+      resourceId: id,
+      details: {
+        changes: dto,
+      },
+      ipAddress,
+      userAgent,
+    });
+
+    return updatedVideo;
   }
 
-  async remove(id: number) {
+  async remove(id: number, performedBy?: number, ipAddress?: string, userAgent?: string) {
     // Get video details BEFORE deleting (needed for matching in sections)
     const video = await this.db.youTubeVideo.findUnique({
       where: { id },
@@ -379,7 +415,23 @@ export class YouTubeVideosService {
     });
 
     // Delete the YouTube video (many-to-many relations will be handled automatically)
-    return this.db.youTubeVideo.delete({ where: { id } });
+    const result = await this.db.youTubeVideo.delete({ where: { id } });
+    
+    // Audit log: YouTube video deleted
+    await this.auditLog.logSuccess({
+      userId: performedBy,
+      action: AuditAction.RESOURCE_DELETED,
+      resource: 'YouTubeVideo',
+      resourceId: id,
+      details: {
+        youtubeLink: videoYoutubeLink,
+        name: videoName,
+      },
+      ipAddress,
+      userAgent,
+    });
+
+    return result;
   }
 
   /**

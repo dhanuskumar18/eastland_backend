@@ -4,16 +4,34 @@ import { CreatePageDto } from './dto/create-page.dto';
 import { UpdatePageDto } from './dto/update-page.dto';
 import { PaginationDto } from './dto/pagination.dto';
 import { YouTubeVideosService } from '../youtube-videos/youtube-videos.service';
+import { AuditLogService, AuditAction } from '../common/services/audit-log.service';
 
 @Injectable()
 export class PagesService {
   constructor(
     private readonly db: DatabaseService,
     private readonly youtubeVideosService: YouTubeVideosService,
+    private readonly auditLog: AuditLogService,
   ) {}
 
-  create(dto: CreatePageDto) {
-    return this.db.page.create({ data: dto });
+  async create(dto: CreatePageDto, performedBy?: number, ipAddress?: string, userAgent?: string) {
+    const page = await this.db.page.create({ data: dto });
+    
+    // Audit log: Page created
+    await this.auditLog.logSuccess({
+      userId: performedBy,
+      action: AuditAction.RESOURCE_CREATED,
+      resource: 'Page',
+      resourceId: page.id,
+      details: {
+        name: page.name,
+        slug: page.slug,
+      },
+      ipAddress,
+      userAgent,
+    });
+    
+    return page;
   }
 
   async findAll(paginationDto?: PaginationDto) {
@@ -194,20 +212,59 @@ export class PagesService {
     };
   }
 
-  async update(id: number, dto: UpdatePageDto) {
+  async update(id: number, dto: UpdatePageDto, performedBy?: number, ipAddress?: string, userAgent?: string) {
     await this.ensureExists(id);
-    return this.db.page.update({ where: { id }, data: dto });
+    const page = await this.db.page.update({ where: { id }, data: dto });
+    
+    // Audit log: Page updated
+    await this.auditLog.logSuccess({
+      userId: performedBy,
+      action: AuditAction.RESOURCE_UPDATED,
+      resource: 'Page',
+      resourceId: page.id,
+      details: {
+        name: page.name,
+        slug: page.slug,
+        changes: dto,
+      },
+      ipAddress,
+      userAgent,
+    });
+    
+    return page;
   }
 
-  async remove(id: number) {
-    await this.ensureExists(id);
+  async remove(id: number, performedBy?: number, ipAddress?: string, userAgent?: string) {
+    const page = await this.ensureExists(id);
+    const pageData = await this.db.page.findUnique({ 
+      where: { id }, 
+      select: { id: true, name: true, slug: true } 
+    });
+    
     // Sections and translations are cascaded via Prisma relation on delete
-    return this.db.page.delete({ where: { id } });
+    await this.db.page.delete({ where: { id } });
+    
+    // Audit log: Page deleted
+    await this.auditLog.logSuccess({
+      userId: performedBy,
+      action: AuditAction.RESOURCE_DELETED,
+      resource: 'Page',
+      resourceId: id,
+      details: {
+        name: pageData?.name,
+        slug: pageData?.slug,
+      },
+      ipAddress,
+      userAgent,
+    });
+    
+    return { message: 'Page deleted successfully' };
   }
 
   private async ensureExists(id: number) {
     const exists = await this.db.page.findUnique({ where: { id }, select: { id: true } });
     if (!exists) throw new NotFoundException('Page not found');
+    return exists;
   }
 
   /**

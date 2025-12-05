@@ -17,8 +17,14 @@ export class PagesController {
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   @Header('Pragma', 'no-cache')
   @Header('Expires', '0')
-  create(@Body() dto: CreatePageDto) {
-    return this.pagesService.create(dto);
+  create(@Body() dto: CreatePageDto, @Req() req: Request) {
+    const userId = (req.user as any)?.id;
+    return this.pagesService.create(
+      dto,
+      userId,
+      req.ip || req.socket.remoteAddress,
+      req.get('user-agent')
+    );
   }
 
   @Get()
@@ -47,13 +53,26 @@ export class PagesController {
   }
 
   @Delete(':id')
-  remove(@Param('id', ParseIntPipe) id: number) {
-    return this.pagesService.remove(id);
+  remove(@Param('id', ParseIntPipe) id: number, @Req() req: Request) {
+    const userId = (req.user as any)?.id;
+    return this.pagesService.remove(
+      id,
+      userId,
+      req.ip || req.socket.remoteAddress,
+      req.get('user-agent')
+    );
   }
 
   @Patch(':id')
-  update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdatePageDto) {
-    return this.pagesService.update(id, dto);
+  update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdatePageDto, @Req() req: Request) {
+    const userId = (req.user as any)?.id;
+    return this.pagesService.update(
+      id,
+      dto,
+      userId,
+      req.ip || req.socket.remoteAddress,
+      req.get('user-agent')
+    );
   }
 
   @Get(':id')

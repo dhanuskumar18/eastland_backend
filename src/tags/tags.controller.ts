@@ -17,8 +17,14 @@ export class TagsController {
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   @Header('Pragma', 'no-cache')
   @Header('Expires', '0')
-  create(@Body() dto: CreateTagDto) {
-    return this.tagsService.create(dto);
+  create(@Body() dto: CreateTagDto, @Req() req: Request) {
+    const userId = (req.user as any)?.id;
+    return this.tagsService.create(
+      dto,
+      userId,
+      req.ip || req.socket.remoteAddress,
+      req.get('user-agent')
+    );
   }
 
   @Get()
@@ -62,8 +68,16 @@ export class TagsController {
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateTagDto,
+    @Req() req: Request,
   ) {
-    return this.tagsService.update(id, dto);
+    const userId = (req.user as any)?.id;
+    return this.tagsService.update(
+      id,
+      dto,
+      userId,
+      req.ip || req.socket.remoteAddress,
+      req.get('user-agent')
+    );
   }
 
   @Delete(':id')
@@ -73,9 +87,17 @@ export class TagsController {
   remove(
     @Param('id', ParseIntPipe) id: number,
     @Query('for') forType: TagForDto,
+    @Req() req: Request,
   ) {
+    const userId = (req.user as any)?.id;
     const normalized = this.normalizeForRequired(forType);
-    return this.tagsService.remove(id, normalized);
+    return this.tagsService.remove(
+      id,
+      normalized,
+      userId,
+      req.ip || req.socket.remoteAddress,
+      req.get('user-agent')
+    );
   }
 
   private normalizeFor(value?: string | TagForDto): TagForDto | undefined {

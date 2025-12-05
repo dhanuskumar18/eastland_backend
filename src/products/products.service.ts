@@ -4,6 +4,7 @@ import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { PaginationDto } from '../brand/dto/pagination.dto';
 import { ProductFilterDto } from './dto/filter.dto';
+import { AuditLogService, AuditAction } from '../common/services/audit-log.service';
 
 @Injectable()
 export class ProductsService {
@@ -11,9 +12,10 @@ export class ProductsService {
   
   constructor(
     private readonly db: DatabaseService,
+    private readonly auditLog: AuditLogService,
   ) {}
 
-  async create(dto: CreateProductDto) {
+  async create(dto: CreateProductDto, performedBy?: number, ipAddress?: string, userAgent?: string) {
     // Validate brand, category, and tags in parallel
     const [brand, category, tags] = await Promise.all([
       this.db.brand.findUnique({ 
@@ -102,6 +104,21 @@ export class ProductsService {
           select: { id: true, locale: true, name: true, slug: true, description: true }
         },
       },
+    });
+
+    // Audit log: Product created
+    await this.auditLog.logSuccess({
+      userId: performedBy,
+      action: AuditAction.RESOURCE_CREATED,
+      resource: 'Product',
+      resourceId: product.id,
+      details: {
+        sku: product.sku,
+        name: dto.name,
+        brandId: product.brandId,
+      },
+      ipAddress,
+      userAgent,
     });
 
     return product;
@@ -277,7 +294,7 @@ export class ProductsService {
     return product;
   }
 
-  async update(id: number, dto: UpdateProductDto) {
+  async update(id: number, dto: UpdateProductDto, performedBy?: number, ipAddress?: string, userAgent?: string) {
     const existing = await this.db.product.findUnique({
       where: { id },
       select: { 
@@ -404,15 +421,31 @@ export class ProductsService {
       });
     }
 
-    return this.findOne(id);
+    const updatedProduct = await this.findOne(id);
+    
+    // Audit log: Product updated
+    await this.auditLog.logSuccess({
+      userId: performedBy,
+      action: AuditAction.RESOURCE_UPDATED,
+      resource: 'Product',
+      resourceId: id,
+      details: {
+        changes: dto,
+      },
+      ipAddress,
+      userAgent,
+    });
+
+    return updatedProduct;
   }
 
-  async remove(id: number) {
+  async remove(id: number, performedBy?: number, ipAddress?: string, userAgent?: string) {
     // Get product details BEFORE deleting (needed for matching in sections)
     const product = await this.db.product.findUnique({
       where: { id },
       select: {
         id: true,
+        sku: true,
         images: {
           select: { url: true },
           orderBy: { position: 'asc' },
@@ -448,6 +481,20 @@ export class ProductsService {
 
     // Delete the product (many-to-many relations will be handled automatically)
     const result = await this.db.product.delete({ where: { id } });
+
+    // Audit log: Product deleted
+    await this.auditLog.logSuccess({
+      userId: performedBy,
+      action: AuditAction.RESOURCE_DELETED,
+      resource: 'Product',
+      resourceId: id,
+      details: {
+        sku: product.sku,
+        name: productName,
+      },
+      ipAddress,
+      userAgent,
+    });
 
     return result;
   }

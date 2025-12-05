@@ -17,8 +17,14 @@ export class BrandController {
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   @Header('Pragma', 'no-cache')
   @Header('Expires', '0')
-  create(@Body() dto: CreateBrandDto) {
-    return this.service.create(dto);
+  create(@Body() dto: CreateBrandDto, @Req() req: Request) {
+    const userId = (req.user as any)?.id;
+    return this.service.create(
+      dto,
+      userId,
+      req.ip || req.socket.remoteAddress,
+      req.get('user-agent')
+    );
   }
 
   @Get()
@@ -46,16 +52,29 @@ export class BrandController {
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   @Header('Pragma', 'no-cache')
   @Header('Expires', '0')
-  update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateBrandDto) {
-    return this.service.update(id, dto);
+  update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateBrandDto, @Req() req: Request) {
+    const userId = (req.user as any)?.id;
+    return this.service.update(
+      id,
+      dto,
+      userId,
+      req.ip || req.socket.remoteAddress,
+      req.get('user-agent')
+    );
   }
 
   @Delete(':id')
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   @Header('Pragma', 'no-cache')
   @Header('Expires', '0')
-  remove(@Param('id', ParseIntPipe) id: number) {
-    return this.service.remove(id);
+  remove(@Param('id', ParseIntPipe) id: number, @Req() req: Request) {
+    const userId = (req.user as any)?.id;
+    return this.service.remove(
+      id,
+      userId,
+      req.ip || req.socket.remoteAddress,
+      req.get('user-agent')
+    );
   }
 }
 

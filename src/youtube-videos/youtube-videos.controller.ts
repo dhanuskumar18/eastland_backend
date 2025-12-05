@@ -32,8 +32,14 @@ export class YouTubeVideosController {
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   @Header('Pragma', 'no-cache')
   @Header('Expires', '0')
-  async create(@Body() dto: CreateYouTubeVideoDto) {
-    const data = await this.youtubeVideosService.create(dto);
+  async create(@Body() dto: CreateYouTubeVideoDto, @Req() req: Request) {
+    const userId = (req.user as any)?.id;
+    const data = await this.youtubeVideosService.create(
+      dto,
+      userId,
+      req.ip || req.socket.remoteAddress,
+      req.get('user-agent')
+    );
     return {
       version: '1',
       code: HttpStatus.CREATED,
@@ -113,8 +119,16 @@ export class YouTubeVideosController {
   async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateYouTubeVideoDto,
+    @Req() req: Request,
   ) {
-    const data = await this.youtubeVideosService.update(id, dto);
+    const userId = (req.user as any)?.id;
+    const data = await this.youtubeVideosService.update(
+      id,
+      dto,
+      userId,
+      req.ip || req.socket.remoteAddress,
+      req.get('user-agent')
+    );
     return {
       version: '1',
       code: HttpStatus.OK,
@@ -129,8 +143,14 @@ export class YouTubeVideosController {
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   @Header('Pragma', 'no-cache')
   @Header('Expires', '0')
-  async remove(@Param('id', ParseIntPipe) id: number) {
-    await this.youtubeVideosService.remove(id);
+  async remove(@Param('id', ParseIntPipe) id: number, @Req() req: Request) {
+    const userId = (req.user as any)?.id;
+    await this.youtubeVideosService.remove(
+      id,
+      userId,
+      req.ip || req.socket.remoteAddress,
+      req.get('user-agent')
+    );
     return {
       version: '1',
       code: HttpStatus.OK,

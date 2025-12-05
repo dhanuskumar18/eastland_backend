@@ -16,8 +16,14 @@ export class CategoryController {
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   @Header('Pragma', 'no-cache')
   @Header('Expires', '0')
-  create(@Body() dto: CreateCategoryDto) {
-    return this.service.create(dto);
+  create(@Body() dto: CreateCategoryDto, @Req() req: Request) {
+    const userId = (req.user as any)?.id;
+    return this.service.create(
+      dto,
+      userId,
+      req.ip || req.socket.remoteAddress,
+      req.get('user-agent')
+    );
   }
 
   @Get()
@@ -61,8 +67,16 @@ export class CategoryController {
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateCategoryDto,
+    @Req() req: Request,
   ) {
-    return this.service.update(id, dto);
+    const userId = (req.user as any)?.id;
+    return this.service.update(
+      id,
+      dto,
+      userId,
+      req.ip || req.socket.remoteAddress,
+      req.get('user-agent')
+    );
   }
 
   @Delete(':id')
@@ -72,9 +86,17 @@ export class CategoryController {
   remove(
     @Param('id', ParseIntPipe) id: number,
     @Query('for') forType: CategoryForDto,
+    @Req() req: Request,
   ) {
+    const userId = (req.user as any)?.id;
     const normalized = this.normalizeForRequired(forType);
-    return this.service.remove(id, normalized);
+    return this.service.remove(
+      id,
+      normalized,
+      userId,
+      req.ip || req.socket.remoteAddress,
+      req.get('user-agent')
+    );
   }
 
   private normalizeFor(value?: string | CategoryForDto): CategoryForDto | undefined {

@@ -16,7 +16,9 @@ import {
   HttpStatus,
   UseFilters,
   Header,
+  Req,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import { SkipThrottle } from '@nestjs/throttler';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { SeoService } from './seo.service';
@@ -196,9 +198,15 @@ export class SeoController {
   @UseGuards(JwtGuard)
   @HttpCode(HttpStatus.OK)
   @Header('Cache-Control', 'no-store')
-  async createOrUpdateGlobalSeo(@Body() dto: CreateGlobalSeoDto) {
+  async createOrUpdateGlobalSeo(@Body() dto: CreateGlobalSeoDto, @Req() req: Request) {
     try {
-      const data = await this.seoService.createOrUpdateGlobalSeo(dto);
+      const userId = (req.user as any)?.id;
+      const data = await this.seoService.createOrUpdateGlobalSeo(
+        dto,
+        userId,
+        req.ip || req.socket.remoteAddress,
+        req.get('user-agent')
+      );
       return {
         version: '1',
         code: 200,
@@ -216,9 +224,15 @@ export class SeoController {
   @UseGuards(JwtGuard)
   @HttpCode(HttpStatus.OK)
   @Header('Cache-Control', 'no-store')
-  async updateGlobalSeo(@Body() dto: UpdateGlobalSeoDto) {
+  async updateGlobalSeo(@Body() dto: UpdateGlobalSeoDto, @Req() req: Request) {
     try {
-      const data = await this.seoService.updateGlobalSeo(dto);
+      const userId = (req.user as any)?.id;
+      const data = await this.seoService.updateGlobalSeo(
+        dto,
+        userId,
+        req.ip || req.socket.remoteAddress,
+        req.get('user-agent')
+      );
       return {
         version: '1',
         code: 200,
@@ -308,9 +322,15 @@ export class SeoController {
   @UseGuards(JwtGuard)
   @HttpCode(HttpStatus.CREATED)
   @Header('Cache-Control', 'no-store')
-  async createPageSeo(@Body() dto: CreatePageSeoDto) {
+  async createPageSeo(@Body() dto: CreatePageSeoDto, @Req() req: Request) {
     try {
-      const data = await this.seoService.createPageSeo(dto);
+      const userId = (req.user as any)?.id;
+      const data = await this.seoService.createPageSeo(
+        dto,
+        userId,
+        req.ip || req.socket.remoteAddress,
+        req.get('user-agent')
+      );
       return {
         version: '1',
         code: 201,
@@ -341,9 +361,17 @@ export class SeoController {
   async updatePageSeo(
     @Param('pageId', ParseIntPipe) pageId: number,
     @Body() dto: UpdatePageSeoDto,
+    @Req() req: Request,
   ) {
     try {
-      const data = await this.seoService.updatePageSeo(pageId, dto);
+      const userId = (req.user as any)?.id;
+      const data = await this.seoService.updatePageSeo(
+        pageId,
+        dto,
+        userId,
+        req.ip || req.socket.remoteAddress,
+        req.get('user-agent')
+      );
       return {
         version: '1',
         code: 200,

@@ -3,6 +3,7 @@ import { DatabaseService } from '../database/database.service';
 import { CreateBrandDto } from './dto/create-brand.dto';
 import { UpdateBrandDto } from './dto/update-brand.dto';
 import { PaginationDto } from './dto/pagination.dto';
+import { AuditLogService, AuditAction } from '../common/services/audit-log.service';
 
 @Injectable()
 export class BrandService {
@@ -10,11 +11,26 @@ export class BrandService {
 
   constructor(
     private readonly db: DatabaseService,
+    private readonly auditLog: AuditLogService,
   ) {}
 
-  async create(dto: CreateBrandDto) {
+  async create(dto: CreateBrandDto, performedBy?: number, ipAddress?: string, userAgent?: string) {
     const slug = this.slugify(dto.name);
     const brand = await this.db.brand.create({ data: { name: dto.name, slug } });
+    
+    // Audit log: Brand created
+    await this.auditLog.logSuccess({
+      userId: performedBy,
+      action: AuditAction.RESOURCE_CREATED,
+      resource: 'Brand',
+      resourceId: brand.id,
+      details: {
+        name: dto.name,
+        slug,
+      },
+      ipAddress,
+      userAgent,
+    });
     
     return brand;
   }
@@ -71,10 +87,10 @@ export class BrandService {
     return brand;
   }
 
-  async update(id: number, dto: UpdateBrandDto) {
+  async update(id: number, dto: UpdateBrandDto, performedBy?: number, ipAddress?: string, userAgent?: string) {
     const existing = await this.db.brand.findUnique({ 
       where: { id },
-      select: { id: true }
+      select: { id: true, name: true }
     });
     if (!existing) throw new NotFoundException('Brand not found');
 
@@ -88,14 +104,41 @@ export class BrandService {
     
     const updated = await this.db.brand.update({ where: { id }, data });
     
+    // Audit log: Brand updated
+    await this.auditLog.logSuccess({
+      userId: performedBy,
+      action: AuditAction.RESOURCE_UPDATED,
+      resource: 'Brand',
+      resourceId: id,
+      details: {
+        changes: dto,
+        oldName: existing.name,
+      },
+      ipAddress,
+      userAgent,
+    });
+    
     return updated;
   }
 
-  async remove(id: number) {
-    const existing = await this.db.brand.findUnique({ where: { id }, select: { id: true } });
+  async remove(id: number, performedBy?: number, ipAddress?: string, userAgent?: string) {
+    const existing = await this.db.brand.findUnique({ where: { id }, select: { id: true, name: true } });
     if (!existing) throw new NotFoundException('Brand not found');
     
     const result = await this.db.brand.delete({ where: { id } });
+    
+    // Audit log: Brand deleted
+    await this.auditLog.logSuccess({
+      userId: performedBy,
+      action: AuditAction.RESOURCE_DELETED,
+      resource: 'Brand',
+      resourceId: id,
+      details: {
+        name: existing.name,
+      },
+      ipAddress,
+      userAgent,
+    });
     
     return result;
   }

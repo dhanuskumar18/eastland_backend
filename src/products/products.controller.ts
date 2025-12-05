@@ -29,8 +29,14 @@ export class ProductsController {
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   @Header('Pragma', 'no-cache')
   @Header('Expires', '0')
-  async create(@Body() dto: CreateProductDto) {
-    return this.productsService.create(dto);
+  async create(@Body() dto: CreateProductDto, @Req() req: Request) {
+    const userId = (req.user as any)?.id;
+    return this.productsService.create(
+      dto,
+      userId,
+      req.ip || req.socket.remoteAddress,
+      req.get('user-agent')
+    );
   }
 
   @Get()
@@ -77,16 +83,30 @@ export class ProductsController {
   async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateProductDto,
+    @Req() req: Request,
   ) {
-    return this.productsService.update(id, dto);
+    const userId = (req.user as any)?.id;
+    return this.productsService.update(
+      id,
+      dto,
+      userId,
+      req.ip || req.socket.remoteAddress,
+      req.get('user-agent')
+    );
   }
 
   @Delete(':id')
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   @Header('Pragma', 'no-cache')
   @Header('Expires', '0')
-  remove(@Param('id', ParseIntPipe) id: number) {
-    return this.productsService.remove(id);
+  remove(@Param('id', ParseIntPipe) id: number, @Req() req: Request) {
+    const userId = (req.user as any)?.id;
+    return this.productsService.remove(
+      id,
+      userId,
+      req.ip || req.socket.remoteAddress,
+      req.get('user-agent')
+    );
   }
 }
 

@@ -5,15 +5,17 @@ import { UpdateTestimonialDto } from './dto/update-testimonial.dto';
 import { PaginationDto } from './dto/pagination.dto';
 import { TestimonialFilterDto } from './dto/filter.dto';
 import { UploadService } from '../upload/upload.service';
+import { AuditLogService, AuditAction } from '../common/services/audit-log.service';
 
 @Injectable()
 export class TestimonialsService {
   constructor(
     private readonly db: DatabaseService,
     private readonly uploadService: UploadService,
+    private readonly auditLog: AuditLogService,
   ) {}
 
-  async create(dto: CreateTestimonialDto) {
+  async create(dto: CreateTestimonialDto, performedBy?: number, ipAddress?: string, userAgent?: string) {
     const testimonial = await this.db.testimonial.create({
       data: {
         clientName: dto.clientName,
@@ -21,6 +23,20 @@ export class TestimonialsService {
         review: dto.review,
         imageUrl: dto.imageUrl,
       },
+    });
+
+    // Audit log: Testimonial created
+    await this.auditLog.logSuccess({
+      userId: performedBy,
+      action: AuditAction.RESOURCE_CREATED,
+      resource: 'Testimonial',
+      resourceId: testimonial.id,
+      details: {
+        clientName: dto.clientName,
+        profession: dto.profession,
+      },
+      ipAddress,
+      userAgent,
     });
 
     return {
@@ -102,7 +118,7 @@ export class TestimonialsService {
     };
   }
 
-  async update(id: number, dto: UpdateTestimonialDto) {
+  async update(id: number, dto: UpdateTestimonialDto, performedBy?: number, ipAddress?: string, userAgent?: string) {
     const existing = await this.db.testimonial.findUnique({ where: { id } });
     if (!existing) {
       throw new NotFoundException('Testimonial not found');
@@ -151,6 +167,19 @@ export class TestimonialsService {
       data,
     });
 
+    // Audit log: Testimonial updated
+    await this.auditLog.logSuccess({
+      userId: performedBy,
+      action: AuditAction.RESOURCE_UPDATED,
+      resource: 'Testimonial',
+      resourceId: id,
+      details: {
+        changes: dto,
+      },
+      ipAddress,
+      userAgent,
+    });
+
     return {
       status: true,
       code: 200,
@@ -159,7 +188,7 @@ export class TestimonialsService {
     };
   }
 
-  async remove(id: number) {
+  async remove(id: number, performedBy?: number, ipAddress?: string, userAgent?: string) {
     // Get testimonial details BEFORE deleting (needed for matching in sections)
     const testimonial = await this.db.testimonial.findUnique({
       where: { id },
@@ -190,6 +219,20 @@ export class TestimonialsService {
     }
 
     await this.db.testimonial.delete({ where: { id } });
+
+    // Audit log: Testimonial deleted
+    await this.auditLog.logSuccess({
+      userId: performedBy,
+      action: AuditAction.RESOURCE_DELETED,
+      resource: 'Testimonial',
+      resourceId: id,
+      details: {
+        clientName: testimonial.clientName,
+        profession: testimonial.profession,
+      },
+      ipAddress,
+      userAgent,
+    });
 
     return {
       status: true,

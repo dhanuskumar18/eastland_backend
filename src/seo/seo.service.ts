@@ -15,6 +15,7 @@ import { CreateGlobalSeoDto } from './dto/create-global-seo.dto';
 import { UpdateGlobalSeoDto } from './dto/update-global-seo.dto';
 import { CreatePageSeoDto } from './dto/create-page-seo.dto';
 import { UpdatePageSeoDto } from './dto/update-page-seo.dto';
+import { AuditLogService, AuditAction } from '../common/services/audit-log.service';
 
 @Injectable()
 export class SeoService {
@@ -25,6 +26,7 @@ export class SeoService {
   constructor(
     private configService: ConfigService,
     private prisma: DatabaseService,
+    private readonly auditLog: AuditLogService,
   ) {
     this.region = this.configService.get<string>('AWS_REGION') || 'us-east-1';
     this.bucketName = this.configService.get<string>('AWS_S3_BUCKET_NAME') || 'eastland-s3';
@@ -315,11 +317,12 @@ export class SeoService {
     };
   }
 
-  async createOrUpdateGlobalSeo(dto: CreateGlobalSeoDto) {
+  async createOrUpdateGlobalSeo(dto: CreateGlobalSeoDto, performedBy?: number, ipAddress?: string, userAgent?: string) {
     // Check if settings exist
     const existing = await this.prisma.globalSeo.findFirst();
 
     let result;
+    let isCreate = false;
     if (existing) {
       // Update existing
       result = await this.prisma.globalSeo.update({
@@ -336,6 +339,7 @@ export class SeoService {
       });
     } else {
       // Create new
+      isCreate = true;
       result = await this.prisma.globalSeo.create({
         data: {
           siteName: dto.siteName,
@@ -349,6 +353,20 @@ export class SeoService {
       });
     }
 
+    // Audit log: Global SEO created or updated
+    await this.auditLog.logSuccess({
+      userId: performedBy,
+      action: isCreate ? AuditAction.RESOURCE_CREATED : AuditAction.RESOURCE_UPDATED,
+      resource: 'GlobalSeo',
+      resourceId: result.id,
+      details: {
+        siteName: dto.siteName,
+        action: isCreate ? 'created' : 'updated',
+      },
+      ipAddress,
+      userAgent,
+    });
+
     return {
       siteName: result.siteName,
       defaultTitle: result.defaultTitle,
@@ -360,7 +378,7 @@ export class SeoService {
     };
   }
 
-  async updateGlobalSeo(dto: UpdateGlobalSeoDto) {
+  async updateGlobalSeo(dto: UpdateGlobalSeoDto, performedBy?: number, ipAddress?: string, userAgent?: string) {
     const existing = await this.prisma.globalSeo.findFirst();
 
     if (!existing) {
@@ -386,6 +404,19 @@ export class SeoService {
         }),
         ...(dto.robotsTxt !== undefined && { robotsTxt: dto.robotsTxt || null }),
       },
+    });
+
+    // Audit log: Global SEO updated
+    await this.auditLog.logSuccess({
+      userId: performedBy,
+      action: AuditAction.RESOURCE_UPDATED,
+      resource: 'GlobalSeo',
+      resourceId: result.id,
+      details: {
+        changes: dto,
+      },
+      ipAddress,
+      userAgent,
     });
 
     return {
@@ -459,7 +490,7 @@ export class SeoService {
     };
   }
 
-  async createPageSeo(dto: CreatePageSeoDto) {
+  async createPageSeo(dto: CreatePageSeoDto, performedBy?: number, ipAddress?: string, userAgent?: string) {
     // Verify page exists
     const page = await this.prisma.page.findUnique({
       where: { id: dto.pageId },
@@ -492,6 +523,20 @@ export class SeoService {
       },
     });
 
+    // Audit log: Page SEO created
+    await this.auditLog.logSuccess({
+      userId: performedBy,
+      action: AuditAction.RESOURCE_CREATED,
+      resource: 'PageSeo',
+      resourceId: result.pageId,
+      details: {
+        pageId: dto.pageId,
+        metaTitle: dto.metaTitle,
+      },
+      ipAddress,
+      userAgent,
+    });
+
     return {
       pageId: result.pageId,
       metaTitle: result.metaTitle,
@@ -503,7 +548,7 @@ export class SeoService {
     };
   }
 
-  async updatePageSeo(pageId: number, dto: UpdatePageSeoDto) {
+  async updatePageSeo(pageId: number, dto: UpdatePageSeoDto, performedBy?: number, ipAddress?: string, userAgent?: string) {
     // Verify page exists
     const page = await this.prisma.page.findUnique({
       where: { id: pageId },
@@ -540,6 +585,20 @@ export class SeoService {
           structuredData: dto.structuredData || undefined,
         }),
       },
+    });
+
+    // Audit log: Page SEO updated
+    await this.auditLog.logSuccess({
+      userId: performedBy,
+      action: AuditAction.RESOURCE_UPDATED,
+      resource: 'PageSeo',
+      resourceId: pageId,
+      details: {
+        pageId,
+        changes: dto,
+      },
+      ipAddress,
+      userAgent,
     });
 
     return {

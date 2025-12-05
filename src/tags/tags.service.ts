@@ -3,6 +3,7 @@ import { DatabaseService } from '../database/database.service';
 import { TagForDto, CreateTagDto } from './dto/create-tag.dto';
 import { UpdateTagDto } from './dto/update-tag.dto';
 import { PaginationDto } from './dto/pagination.dto';
+import { AuditLogService, AuditAction } from '../common/services/audit-log.service';
 
 // Temporary type until migration is run and Prisma generates the enum
 type TagType = 'VIDEO' | 'PRODUCT';
@@ -16,15 +17,30 @@ export class TagsService {
 
   constructor(
     private readonly db: DatabaseService,
+    private readonly auditLog: AuditLogService,
   ) {}
 
-  async create(dto: CreateTagDto) {
+  async create(dto: CreateTagDto, performedBy?: number, ipAddress?: string, userAgent?: string) {
     const type = this.mapForToType(dto.for) as TagType;
     const tag = await this.db.tag.create({ 
       data: { 
         name: dto.name, 
         type: type as any
       } as any
+    });
+
+    // Audit log: Tag created
+    await this.auditLog.logSuccess({
+      userId: performedBy,
+      action: AuditAction.RESOURCE_CREATED,
+      resource: 'Tag',
+      resourceId: tag.id,
+      details: {
+        name: dto.name,
+        type: dto.for,
+      },
+      ipAddress,
+      userAgent,
     });
 
     return tag;
@@ -94,11 +110,11 @@ export class TagsService {
     return tag;
   }
 
-  async update(id: number, dto: UpdateTagDto) {
+  async update(id: number, dto: UpdateTagDto, performedBy?: number, ipAddress?: string, userAgent?: string) {
     // First, find the tag by id (regardless of type) to check if it exists
     const existingTag = await this.db.tag.findUnique({ 
       where: { id },
-      select: { id: true }
+      select: { id: true, name: true }
     });
     if (!existingTag) throw new NotFoundException('Tag not found');
     
@@ -118,25 +134,50 @@ export class TagsService {
 
     const updated = await this.db.tag.update({ where: { id }, data });
 
+    // Audit log: Tag updated
+    await this.auditLog.logSuccess({
+      userId: performedBy,
+      action: AuditAction.RESOURCE_UPDATED,
+      resource: 'Tag',
+      resourceId: id,
+      details: {
+        changes: dto,
+        oldName: existingTag.name,
+      },
+      ipAddress,
+      userAgent,
+    });
+
     return updated;
   }
 
-  async remove(id: number, forType: TagForDto) {
+  async remove(id: number, forType: TagForDto, performedBy?: number, ipAddress?: string, userAgent?: string) {
     const type = this.mapForToType(forType);
-    await this.ensureExists(id, type);
+    const existing = await this.db.tag.findFirst({ 
+      where: { id, type: type as any } as any, 
+      select: { id: true, name: true } 
+    });
+    if (!existing) throw new NotFoundException('Tag not found');
     
     const result = await this.db.tag.delete({ where: { id } });
+
+    // Audit log: Tag deleted
+    await this.auditLog.logSuccess({
+      userId: performedBy,
+      action: AuditAction.RESOURCE_DELETED,
+      resource: 'Tag',
+      resourceId: id,
+      details: {
+        name: existing.name,
+        type: forType,
+      },
+      ipAddress,
+      userAgent,
+    });
 
     return result;
   }
 
-  private async ensureExists(id: number, type: TagType) {
-    const exists = await this.db.tag.findFirst({ 
-      where: { id, type: type as any } as any, 
-      select: { id: true } 
-    });
-    if (!exists) throw new NotFoundException('Tag not found');
-  }
 
   private mapForToType(forValue: TagForDto): TagType {
     if (forValue === TagForDto.VIDEO) return 'VIDEO';
