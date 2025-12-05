@@ -1,11 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { MailerService } from '@nestjs-modules/mailer';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
 
-  constructor(private mailerService: MailerService) {}
+  constructor(
+    private mailerService: MailerService,
+    private configService: ConfigService,
+  ) {}
 
   async sendOtpEmail(email: string, otp: string): Promise<void> {
     try {
@@ -744,6 +748,112 @@ export class EmailService {
     } catch (error) {
       this.logger.error(`Failed to send password expiry warning to ${email}:`, error);
       // Don't throw - email failure shouldn't block operations
+    }
+  }
+
+  async sendPasswordSetupEmail(email: string, name: string, token: string): Promise<void> {
+    try {
+      this.logger.log(`Attempting to send password setup email to: ${email}`);
+      
+      const frontendUrl = this.configService.get('FRONTEND_URL') || 'http://localhost:5002';
+      // URL encode the token to ensure it's properly formatted in the link
+      const encodedToken = encodeURIComponent(token);
+      const setupLink = `${frontendUrl}/auth/setup-password?token=${encodedToken}`;
+      
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <title>Set Up Your Password</title>
+            <style>
+                body {
+                    font-family: Arial, sans-serif;
+                    line-height: 1.6;
+                    color: #333;
+                    max-width: 600px;
+                    margin: 0 auto;
+                    padding: 20px;
+                }
+                .header {
+                    background-color: #017850;
+                    color: white;
+                    padding: 20px;
+                    text-align: center;
+                    border-radius: 5px;
+                }
+                .button {
+                    display: inline-block;
+                    background-color: #017850;
+                    color: white;
+                    padding: 12px 30px;
+                    text-decoration: none;
+                    border-radius: 5px;
+                    margin: 20px 0;
+                    font-weight: bold;
+                }
+                .button:hover {
+                    background-color: #015a3f;
+                }
+                .info-box {
+                    background-color: #f8f9fa;
+                    border-left: 4px solid #017850;
+                    padding: 15px;
+                    margin: 20px 0;
+                }
+                .footer {
+                    margin-top: 30px;
+                    padding-top: 20px;
+                    border-top: 1px solid #eee;
+                    font-size: 12px;
+                    color: #666;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h1>Welcome! Set Up Your Password</h1>
+            </div>
+            
+            <p>Hello ${name || 'there'},</p>
+            
+            <p>Your account has been created. To complete your account setup, please set up your password by clicking the button below:</p>
+            
+            <div style="text-align: center;">
+                <a href="${setupLink}" class="button">Set Up Password</a>
+            </div>
+            
+            <p>Or copy and paste this link into your browser:</p>
+            <p style="word-break: break-all; color: #017850;">${setupLink}</p>
+            
+            <div class="info-box">
+                <p><strong>Important:</strong></p>
+                <ul>
+                    <li>This link is valid for 24 hours</li>
+                    <li>Do not share this link with anyone</li>
+                    <li>If you did not expect this email, please contact support</li>
+                </ul>
+            </div>
+            
+            <p>After setting up your password, you'll be able to log in to your account.</p>
+            
+            <div class="footer">
+                <p>This is an automated message. Please do not reply to this email.</p>
+            </div>
+        </body>
+        </html>
+      `;
+      
+      await this.mailerService.sendMail({
+        to: email,
+        subject: 'Set Up Your Password',
+        html: htmlContent,
+      });
+      
+      this.logger.log(`Password setup email sent successfully to: ${email}`);
+    } catch (error) {
+      this.logger.error(`Failed to send password setup email to ${email}:`, error);
+      throw error;
     }
   }
 

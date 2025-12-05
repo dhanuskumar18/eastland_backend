@@ -75,3 +75,21 @@ export class ResetPasswordDto {
     @MaxLength(128, { message: 'Password must not exceed 128 characters' })
     newPassword: string;
 }
+
+export class SetupPasswordDto {
+    @IsString()
+    @IsNotEmpty()
+    token: string;
+
+    @IsString()
+    @IsNotEmpty()
+    @MinLength(12, { message: 'Password must be at least 12 characters long' })
+    @MaxLength(128, { message: 'Password must not exceed 128 characters' })
+    password: string;
+
+    @IsString()
+    @IsNotEmpty()
+    @MinLength(12, { message: 'Confirm password must be at least 12 characters long' })
+    @MaxLength(128, { message: 'Confirm password must not exceed 128 characters' })
+    confirmPassword: string;
+}

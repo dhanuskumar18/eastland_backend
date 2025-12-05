@@ -1,5 +1,5 @@
 import { ForbiddenException, Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
-import { AuthDto, SignupDto, TokenResponseDto, ForgotPasswordDto, ResetPasswordDto, VerifyOtpDto, ChangePasswordDto, UpdateProfileDto } from './dto';
+import { AuthDto, SignupDto, TokenResponseDto, ForgotPasswordDto, ResetPasswordDto, VerifyOtpDto, SetupPasswordDto, ChangePasswordDto, UpdateProfileDto } from './dto';
 import * as argon from '@node-rs/argon2';
 import { DatabaseService } from 'src/database/database.service';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/client';
@@ -806,6 +806,107 @@ export class AuthService {
     return { 
       message: 'Password reset successfully. Please log in again.',
       mfaEnabled: user.mfaEnabled,
+    };
+  }
+
+  async setupPassword(dto: SetupPasswordDto): Promise<{ message: string }> {
+    // Validate that passwords match
+    if (dto.password !== dto.confirmPassword) {
+      throw new BadRequestException('Passwords do not match');
+    }
+
+    // Find the token in OTP table
+    const allOtps = await this.prisma.otp.findMany({
+      where: {
+        type: 'PASSWORD_RESET',
+        isUsed: false,
+        expiresAt: { gt: new Date() }, // Not expired
+      },
+      include: {
+        user: true,
+      },
+    });
+
+    // Find matching token
+    let validOtp: (typeof allOtps)[0] | null = null;
+    let user: (typeof allOtps)[0]['user'] | null = null;
+
+    for (const otp of allOtps) {
+      try {
+        const isValid = await argon.verify(otp.code, dto.token);
+        if (isValid) {
+          validOtp = otp;
+          user = otp.user;
+          break;
+        }
+      } catch (error) {
+        // Continue to next OTP if verification fails
+        continue;
+      }
+    }
+
+    if (!validOtp || !user) {
+      throw new BadRequestException('Invalid or expired token');
+    }
+
+    // Validate new password
+    const passwordValidation = PasswordValidator.validate(dto.password);
+    if (!passwordValidation.isValid) {
+      throw new BadRequestException(passwordValidation.errors.join('; '));
+    }
+
+    // Hash new password
+    const hashedPassword = await argon.hash(dto.password);
+
+    // Update password
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password: hashedPassword,
+        passwordChangedAt: new Date(),
+      },
+    });
+
+    // Store password in history
+    await this.prisma.passwordHistory.create({
+      data: {
+        userId: user.id,
+        password: hashedPassword,
+      },
+    });
+
+    // Keep only last 5 passwords in history
+    const allPasswords = await this.prisma.passwordHistory.findMany({
+      where: { userId: user.id },
+      orderBy: { createdAt: 'desc' },
+      skip: 5,
+    });
+
+    if (allPasswords.length > 0) {
+      await this.prisma.passwordHistory.deleteMany({
+        where: {
+          id: { in: allPasswords.map(p => p.id) },
+        },
+      });
+    }
+
+    // Mark token as used
+    await this.prisma.otp.update({
+      where: { id: validOtp.id },
+      data: { isUsed: true },
+    });
+
+    // Clean up all unused password setup tokens for this user
+    await this.prisma.otp.deleteMany({
+      where: {
+        userId: user.id,
+        type: 'PASSWORD_RESET',
+        isUsed: false,
+      },
+    });
+
+    return { 
+      message: 'Password set successfully. You can now log in.',
     };
   }
 
