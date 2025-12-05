@@ -55,11 +55,22 @@ export class ProductsController {
       : undefined;
     
     // Extract filter parameters manually to avoid DTO validation conflicts
+    const isActiveParam = req?.query?.isActive;
+    let isActive: boolean | undefined = undefined;
+    if (isActiveParam !== undefined) {
+      if (typeof isActiveParam === 'string') {
+        isActive = isActiveParam === 'true';
+      } else if (typeof isActiveParam === 'boolean') {
+        isActive = isActiveParam;
+      }
+    }
+    
     const filterDto: ProductFilterDto = {
       search: req?.query?.search as string | undefined,
       category: req?.query?.category as string | undefined,
       tag: req?.query?.tag as string | undefined,
       brand: req?.query?.brand as string | undefined,
+      isActive,
     };
     
     return this.productsService.findAll(

@@ -112,6 +112,7 @@ model Product {
   id           Int                  @id @default(autoincrement())
   sku          String               @unique
   brandId      Int
+  isActive     Boolean              @default(true)
   createdAt    DateTime             @default(now())
   updatedAt    DateTime             @updatedAt
   brand        Brand                @relation(fields: [brandId], references: [id])
@@ -124,6 +125,7 @@ model Product {
   @@index([brandId])
   @@index([sku])
   @@index([createdAt])
+  @@index([isActive])
 }
 
 model Category {
@@ -179,16 +181,19 @@ model Testimonial {
   profession String
   review     String
   imageUrl   String
+  isActive   Boolean  @default(true)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
   @@index([createdAt])
+  @@index([isActive])
 }
 
 model YouTubeVideo {
   id           Int                       @id @default(autoincrement())
   youtubeLink  String
   brandId      Int
+  isActive     Boolean                   @default(true)
   createdAt    DateTime                  @default(now())
   updatedAt    DateTime                  @updatedAt
   brand        Brand                     @relation(fields: [brandId], references: [id])
@@ -199,6 +204,7 @@ model YouTubeVideo {
 
   @@index([youtubeLink])
   @@index([brandId])
+  @@index([isActive])
 }
 
 model YouTubeVideoTranslation {

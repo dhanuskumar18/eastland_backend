@@ -1,4 +1,4 @@
-import { IsString, IsArray, IsOptional, IsNotEmpty, IsUrl } from 'class-validator';
+import { IsString, IsArray, IsOptional, IsNotEmpty, IsUrl, IsBoolean } from 'class-validator';
 import { Type } from 'class-transformer';
 import { IsInt } from 'class-validator';
 
@@ -39,5 +39,10 @@ export class CreateYouTubeVideoDto {
   @IsString()
   @IsOptional()
   imageUrl?: string;
+
+  @IsBoolean()
+  @Type(() => Boolean)
+  @IsOptional()
+  isActive?: boolean;
 }
 

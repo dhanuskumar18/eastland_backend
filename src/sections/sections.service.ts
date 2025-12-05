@@ -194,6 +194,129 @@ export class SectionsService {
     return { message: 'Section deleted successfully' };
   }
 
+  /**
+   * Remove inactive product from all sections
+   * Called when a product becomes inactive
+   */
+  async removeInactiveProductFromSections(productId: number): Promise<void> {
+    try {
+      // Find all sections that might contain this product
+      const sections = await this.db.section.findMany({
+        include: { translations: true },
+      });
+
+      for (const section of sections) {
+        let hasChanges = false;
+        const updatedTranslations = section.translations.map((translation) => {
+          const content = translation.content as any;
+          if (!content || typeof content !== 'object') return translation;
+
+          const updatedContent = { ...content };
+
+          // Check if content has cards array (products section)
+          if (Array.isArray(content.cards)) {
+            const originalLength = content.cards.length;
+            updatedContent.cards = content.cards.filter((card: any) => {
+              // Remove card if it references the inactive product
+              return card.productId !== productId && String(card.productId) !== String(productId);
+            });
+            if (updatedContent.cards.length !== originalLength) {
+              hasChanges = true;
+            }
+          }
+
+          if (hasChanges) {
+            return {
+              ...translation,
+              content: updatedContent,
+            };
+          }
+          return translation;
+        });
+
+        // Update section if changes were made
+        if (hasChanges) {
+          await this.db.$transaction(
+            updatedTranslations
+              .filter((t) => t !== section.translations.find((st) => st.id === t.id))
+              .map((t) =>
+                this.db.sectionTranslation.update({
+                  where: { id: t.id },
+                  data: { content: t.content },
+                })
+              )
+          );
+        }
+      }
+    } catch (error) {
+      // Log error but don't throw - this is a cleanup operation
+      console.error(`Error removing inactive product ${productId} from sections:`, error);
+    }
+  }
+
+  /**
+   * Remove inactive YouTube video from all sections
+   * Called when a video becomes inactive
+   */
+  async removeInactiveVideoFromSections(videoId: number): Promise<void> {
+    try {
+      // Find all sections that might contain this video
+      const sections = await this.db.section.findMany({
+        include: { translations: true },
+      });
+
+      for (const section of sections) {
+        let hasChanges = false;
+        const updatedTranslations = section.translations.map((translation) => {
+          const content = translation.content as any;
+          if (!content || typeof content !== 'object') return translation;
+
+          const updatedContent = { ...content };
+
+          // Check if content has videos array (featured videos section)
+          if (Array.isArray(content.videos)) {
+            const originalLength = content.videos.length;
+            updatedContent.videos = content.videos.filter((video: any) => {
+              // Remove video if it references the inactive video
+              return video.youtubeVideoId !== videoId && String(video.youtubeVideoId) !== String(videoId);
+            });
+            if (updatedContent.videos.length !== originalLength) {
+              hasChanges = true;
+            }
+          }
+
+          if (hasChanges) {
+            return {
+              ...translation,
+              content: updatedContent,
+            };
+          }
+          return translation;
+        });
+
+        // Update section if changes were made
+        if (hasChanges) {
+          await this.db.$transaction(
+            updatedTranslations
+              .filter((t) => {
+                const original = section.translations.find((st) => st.id === t.id);
+                return original && JSON.stringify(original.content) !== JSON.stringify(t.content);
+              })
+              .map((t) =>
+                this.db.sectionTranslation.update({
+                  where: { id: t.id },
+                  data: { content: t.content },
+                })
+              )
+          );
+        }
+      }
+    } catch (error) {
+      // Log error but don't throw - this is a cleanup operation
+      console.error(`Error removing inactive video ${videoId} from sections:`, error);
+    }
+  }
+
   private async ensureExists(id: number) {
     const exists = await this.db.section.findUnique({ where: { id }, select: { id: true } });
     if (!exists) throw new NotFoundException('Section not found');

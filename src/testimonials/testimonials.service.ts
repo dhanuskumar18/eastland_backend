@@ -22,6 +22,7 @@ export class TestimonialsService {
         profession: dto.profession,
         review: dto.review,
         imageUrl: dto.imageUrl,
+        isActive: dto.isActive !== undefined ? dto.isActive : true,
       },
     });
 
@@ -129,6 +130,7 @@ export class TestimonialsService {
       profession?: string;
       review?: string;
       imageUrl?: string;
+      isActive?: boolean;
     } = {};
 
     if (dto.clientName !== undefined) {
@@ -139,6 +141,9 @@ export class TestimonialsService {
     }
     if (dto.review !== undefined) {
       data.review = dto.review;
+    }
+    if (dto.isActive !== undefined) {
+      data.isActive = dto.isActive;
     }
     if (dto.imageUrl !== undefined) {
       // Delete old image if a new one is being provided and it's different

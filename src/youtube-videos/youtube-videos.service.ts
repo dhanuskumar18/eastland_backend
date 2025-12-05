@@ -46,6 +46,7 @@ export class YouTubeVideosService {
       data: {
         youtubeLink: dto.youtubeLink,
         brandId: dto.brandId,
+        isActive: dto.isActive !== undefined ? dto.isActive : true,
         categories: {
           connect: { id: dto.categoryId },
         },
@@ -151,6 +152,11 @@ export class YouTubeVideosService {
       };
     }
 
+    // Filter by isActive status if provided
+    if (filterDto?.isActive !== undefined) {
+      where.isActive = filterDto.isActive;
+    }
+
     if (paginationDto && (paginationDto.page !== undefined || paginationDto.limit !== undefined)) {
       const page = paginationDto.page ?? 1;
       const limit = paginationDto.limit ?? 10;
@@ -233,10 +239,41 @@ export class YouTubeVideosService {
   async update(id: number, dto: UpdateYouTubeVideoDto, performedBy?: number, ipAddress?: string, userAgent?: string) {
     const existing = await this.db.youTubeVideo.findUnique({
       where: { id },
-      include: { categories: true, tags: true },
+      include: { 
+        categories: true, 
+        tags: true,
+      },
     });
 
     if (!existing) throw new NotFoundException('YouTube video not found');
+    
+    // Get isActive status separately to avoid Prisma type issues
+    const videoStatus = await this.db.youTubeVideo.findUnique({
+      where: { id },
+      select: { isActive: true },
+    });
+    
+    // Get video details for section cleanup if needed
+    const videoDetails = dto.isActive === false ? await this.db.youTubeVideo.findUnique({
+      where: { id },
+      select: {
+        youtubeLink: true,
+        images: {
+          select: { url: true },
+          orderBy: { position: 'asc' },
+          take: 1,
+        },
+        translations: {
+          select: { name: true, locale: true },
+          where: { locale: 'en' },
+          take: 1,
+        },
+      },
+    }) : null;
+    
+    // Check if video is being deactivated
+    const wasActive = videoStatus?.isActive !== false;
+    const willBeInactive = dto.isActive === false;
 
     // Validate brand if provided
     if (dto.brandId !== undefined) {
@@ -268,6 +305,11 @@ export class YouTubeVideosService {
     }
 
     const updateData: any = {};
+
+    // Update isActive status
+    if (dto.isActive !== undefined) {
+      updateData.isActive = dto.isActive;
+    }
 
     // Update YouTube link
     if (dto.youtubeLink !== undefined) {
@@ -356,6 +398,14 @@ export class YouTubeVideosService {
     }
 
     const updatedVideo = await this.findOne(id);
+    
+    // If video was just deactivated, remove it from all sections
+    if (wasActive && willBeInactive && videoDetails) {
+      const videoYoutubeLink = videoDetails.youtubeLink || null;
+      const videoImageUrl = videoDetails.images?.[0]?.url || null;
+      const videoName = videoDetails.translations?.[0]?.name || null;
+      await this.removeYouTubeVideoFromSections(id, videoYoutubeLink, videoImageUrl, videoName);
+    }
     
     // Audit log: YouTube video updated
     await this.auditLog.logSuccess({
