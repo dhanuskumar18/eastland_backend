@@ -17,6 +17,7 @@ import {
   ForgotPasswordDto,
   ResetPasswordDto,
   VerifyOtpDto,
+  SetupPasswordDto,
   EnableMfaDto,
   VerifyMfaDto,
   DisableMfaDto,
@@ -189,6 +190,13 @@ export class AuthController {
   @Post("reset-password")
   resetPassword(@Body() dto: ResetPasswordDto) {
     return this.authService.resetPassword(dto);
+  }
+
+  @SkipCsrf() // Skip CSRF for password setup (user not authenticated)
+  @Throttle({ 'password-reset': { limit: 10, ttl: 300000 } }) // 10 attempts per 5 minutes for password setup
+  @Post("setup-password")
+  setupPassword(@Body() dto: SetupPasswordDto) {
+    return this.authService.setupPassword(dto);
   }
 
   // CSRF Token Management Endpoints

@@ -8,6 +8,8 @@ import * as argon from '@node-rs/argon2';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/client';
 import { UserStatus } from '@prisma/client';
 import { AuditLogService, AuditAction } from '../common/services/audit-log.service';
+import { EmailService } from '../email/email.service';
+import * as crypto from 'crypto';
 
 /**
  * ERROR HANDLING & LOGGING CHECKLIST ITEM #1:
@@ -20,13 +22,11 @@ export class UserService {
   constructor(
     private readonly db: DatabaseService,
     private readonly auditLog: AuditLogService,
+    private readonly emailService: EmailService,
   ) {}
 
   async create(dto: CreateUserDto, performedBy?: number, ipAddress?: string, userAgent?: string) {
     try {
-      // Hash password
-      const hash = await argon.hash(dto.password);
-
       // Find or create the specified role
       let role = await this.db.role.findFirst({
         where: { name: dto.role },
@@ -37,6 +37,11 @@ export class UserService {
           data: { name: dto.role },
         });
       }
+
+      // Generate a temporary password hash if password is provided, otherwise generate a random one
+      // For new users without password, we'll create them with a temporary password that must be changed
+      const tempPassword = dto.password || crypto.randomBytes(32).toString('hex');
+      const hash = await argon.hash(tempPassword);
 
       const user = await this.db.user.create({
         data: {
@@ -61,6 +66,43 @@ export class UserService {
         },
       });
 
+      // If password was not provided, generate a password setup token and send email
+      if (!dto.password) {
+        // Generate secure random token
+        const token = crypto.randomBytes(32).toString('hex');
+        const hashedToken = await argon.hash(token);
+        
+        // Set token expiration (24 hours from now)
+        const tokenExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+        // Store token in OTP table (reusing OTP infrastructure)
+        await this.db.otp.create({
+          data: {
+            userId: user.id,
+            code: hashedToken,
+            type: 'PASSWORD_RESET', // Reusing PASSWORD_RESET type for password setup
+            expiresAt: tokenExpiresAt,
+            isUsed: false,
+          },
+        });
+
+        // Send password setup email
+        try {
+          await this.emailService.sendPasswordSetupEmail(dto.email, dto.name, token);
+        } catch (error) {
+          // If email fails, remove the token from database
+          await this.db.otp.deleteMany({
+            where: {
+              userId: user.id,
+              type: 'PASSWORD_RESET',
+              expiresAt: { gte: new Date() },
+            },
+          });
+          this.logger.error(`Failed to send password setup email to ${dto.email}:`, error);
+          // Don't throw - user creation should still succeed even if email fails
+        }
+      }
+
       // AUDIT LOG: User created
       await this.auditLog.logSuccess({
         userId: performedBy,
@@ -75,6 +117,7 @@ export class UserService {
             role: user.role.name,
             status: user.status,
           },
+          passwordSetupRequired: !dto.password,
         },
         ipAddress,
         userAgent,
