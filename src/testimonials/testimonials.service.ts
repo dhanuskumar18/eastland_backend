@@ -160,19 +160,29 @@ export class TestimonialsService {
   }
 
   async remove(id: number) {
-    const existing = await this.db.testimonial.findUnique({
+    // Get testimonial details BEFORE deleting (needed for matching in sections)
+    const testimonial = await this.db.testimonial.findUnique({
       where: { id },
-      select: { id: true, imageUrl: true },
+      select: {
+        id: true,
+        imageUrl: true,
+        clientName: true,
+        profession: true,
+        review: true,
+      },
     });
 
-    if (!existing) {
+    if (!testimonial) {
       throw new NotFoundException('Testimonial not found');
     }
 
+    // Remove testimonial references from page sections BEFORE deleting
+    await this.removeTestimonialFromSections(id, testimonial.imageUrl, testimonial.clientName);
+
     // Delete the associated image from S3
-    if (existing.imageUrl) {
+    if (testimonial.imageUrl) {
       try {
-        await this.uploadService.deleteFile(existing.imageUrl);
+        await this.uploadService.deleteFile(testimonial.imageUrl);
       } catch (error) {
         // Log error but don't fail the deletion
         console.error('Error deleting image:', error);
@@ -186,5 +196,103 @@ export class TestimonialsService {
       code: 200,
       message: 'Testimonial deleted successfully',
     };
+  }
+
+  /**
+   * Remove testimonial references from all page sections
+   * Uses id as primary match, falls back to imageUrl or clientName if id is missing
+   */
+  private async removeTestimonialFromSections(
+    testimonialId: number,
+    imageUrl: string | null,
+    clientName: string | null,
+  ) {
+    try {
+      console.log(`Starting removal of testimonial ${testimonialId} from sections (image: ${imageUrl}, name: ${clientName})`);
+      
+      // Get all section translations
+      const translations = await this.db.sectionTranslation.findMany({
+        select: { id: true, content: true },
+      });
+
+      console.log(`Found ${translations.length} section translations to check`);
+
+      let totalRemoved = 0;
+      // Process each translation
+      for (const translation of translations) {
+        const content = translation.content as any;
+        let updated = false;
+
+        // Check if content has reviews array (testimonials section)
+        if (content?.reviews && Array.isArray(content.reviews)) {
+          const originalLength = content.reviews.length;
+          
+          // Remove reviews that reference this testimonial
+          // Primary match: id or tempId
+          // Fallback match: imageUrl or clientName (for legacy reviews without id)
+          content.reviews = content.reviews.filter(
+            (review: any) => {
+              const reviewId = review?.id || review?.tempId;
+              const reviewImage = review?.image || review?.imageUrl;
+              const reviewName = review?.name || review?.clientName;
+              
+              // Primary match: Check by id or tempId
+              if (reviewId != null && reviewId !== undefined) {
+                const matchesById = String(reviewId) === String(testimonialId) || 
+                                  Number(reviewId) === Number(testimonialId);
+                if (matchesById) {
+                  console.log(`Removing review with id ${reviewId} (matches ${testimonialId})`);
+                  return false; // Remove this review
+                }
+                return true; // Keep this review (different id)
+              }
+              
+              // Fallback match: Check by image URL
+              if (imageUrl && reviewImage) {
+                const imageMatches = reviewImage === imageUrl || 
+                                   reviewImage.includes(imageUrl.split('/').pop() || '') ||
+                                   imageUrl.includes(reviewImage.split('/').pop() || '');
+                if (imageMatches) {
+                  console.log(`Removing review with matching image URL: ${reviewImage}`);
+                  return false; // Remove this review
+                }
+              }
+              
+              // Fallback match: Check by client name
+              if (clientName && reviewName) {
+                const nameMatches = reviewName.toLowerCase().trim() === clientName.toLowerCase().trim();
+                if (nameMatches) {
+                  console.log(`Removing review with matching name: ${reviewName}`);
+                  return false; // Remove this review
+                }
+              }
+              
+              // Keep review if no matches found
+              return true;
+            },
+          );
+          
+          if (content.reviews.length !== originalLength) {
+            updated = true;
+            totalRemoved += (originalLength - content.reviews.length);
+            console.log(`Translation ${translation.id}: Removed ${originalLength - content.reviews.length} review(s)`);
+          }
+        }
+
+        // Update translation if changes were made
+        if (updated) {
+          await this.db.sectionTranslation.update({
+            where: { id: translation.id },
+            data: { content: content },
+          });
+          console.log(`Translation ${translation.id}: Updated successfully`);
+        }
+      }
+      
+      console.log(`Completed: Removed testimonial ${testimonialId} from ${totalRemoved} review(s) across all sections`);
+    } catch (error) {
+      // Log error but don't fail the deletion
+      console.error(`Error removing testimonial ${testimonialId} from sections:`, error);
+    }
   }
 }
