@@ -61,7 +61,8 @@ export class RolesGuard implements CanActivate {
     // Vertical privilege escalation prevention:
     // Users can only access endpoints if their role matches required roles
     // Example: USER role cannot access ADMIN-only endpoints
-    const hasRole = requiredRoles.some((role) => role === userRole);
+    // Convert enum values to strings for comparison (supports both enum and dynamic string roles)
+    const hasRole = requiredRoles.some((role) => String(role) === String(userRole));
     if (!hasRole) {
       throw new ForbiddenException('Insufficient permissions. Admin access required.');
     }

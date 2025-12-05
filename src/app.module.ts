@@ -28,6 +28,7 @@ import { YouTubeVideosModule } from './youtube-videos/youtube-videos.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { ContactSubmissionsModule } from './contact-submissions/contact-submissions.module';
 import { AuditLogsModule } from './audit-logs/audit-logs.module';
+import { RolesModule } from './roles/roles.module';
 import { CommonModule } from './common/common.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 
@@ -54,6 +55,7 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
     DashboardModule,
     ContactSubmissionsModule,
     AuditLogsModule,
+    RolesModule,
     ConfigModule.forRoot({
       isGlobal: true,
     }),
