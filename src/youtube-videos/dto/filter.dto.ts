@@ -1,4 +1,5 @@
-import { IsOptional, IsString } from 'class-validator';
+import { IsOptional, IsString, IsBoolean } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class YouTubeVideoFilterDto {
   @IsOptional()
@@ -16,5 +17,10 @@ export class YouTubeVideoFilterDto {
   @IsOptional()
   @IsString()
   brand?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  @Type(() => Boolean)
+  isActive?: boolean;
 }
 

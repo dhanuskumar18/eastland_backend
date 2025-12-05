@@ -1,6 +1,6 @@
 import { PartialType } from '@nestjs/mapped-types';
 import { CreateYouTubeVideoDto } from './create-youtube-video.dto';
-import { IsString, IsArray, IsOptional, IsUrl } from 'class-validator';
+import { IsString, IsArray, IsOptional, IsUrl, IsBoolean } from 'class-validator';
 import { Type } from 'class-transformer';
 import { IsInt } from 'class-validator';
 
@@ -37,5 +37,10 @@ export class UpdateYouTubeVideoDto extends PartialType(CreateYouTubeVideoDto) {
   @IsString()
   @IsOptional()
   imageUrl?: string;
+
+  @IsBoolean()
+  @Type(() => Boolean)
+  @IsOptional()
+  isActive?: boolean;
 }
 

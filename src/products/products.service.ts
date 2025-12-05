@@ -61,6 +61,7 @@ export class ProductsService {
       data: {
         sku,
         brandId: dto.brandId,
+        isActive: dto.isActive !== undefined ? dto.isActive : true,
         categories: {
           connect: { id: dto.categoryId },
         },
@@ -86,6 +87,7 @@ export class ProductsService {
         id: true,
         sku: true,
         brandId: true,
+        isActive: true,
         createdAt: true,
         updatedAt: true,
         brand: {
@@ -167,6 +169,11 @@ export class ProductsService {
       };
     }
 
+    // Filter by isActive status if provided
+    if (filterDto?.isActive !== undefined) {
+      where.isActive = filterDto.isActive;
+    }
+
     if (paginationDto && (paginationDto.page !== undefined || paginationDto.limit !== undefined)) {
       const page = paginationDto.page ?? 1;
       const limit = paginationDto.limit ?? 10;
@@ -182,6 +189,7 @@ export class ProductsService {
             id: true,
             sku: true,
             brandId: true,
+            isActive: true,
             createdAt: true,
             updatedAt: true,
             brand: {
@@ -234,6 +242,7 @@ export class ProductsService {
         id: true,
         sku: true,
         brandId: true,
+        isActive: true,
         createdAt: true,
         updatedAt: true,
         brand: {
@@ -268,6 +277,7 @@ export class ProductsService {
         id: true,
         sku: true,
         brandId: true,
+        isActive: true,
         createdAt: true,
         updatedAt: true,
         brand: {
@@ -295,16 +305,42 @@ export class ProductsService {
   }
 
   async update(id: number, dto: UpdateProductDto, performedBy?: number, ipAddress?: string, userAgent?: string) {
-    const existing = await this.db.product.findUnique({
+    // Get existing product with all needed fields
+    const existingProduct = await this.db.product.findUnique({
       where: { id },
       select: { 
         id: true, 
         categories: { select: { id: true } }, 
-        tags: { select: { id: true } } 
+        tags: { select: { id: true } },
       },
     });
 
-    if (!existing) throw new NotFoundException('Product not found');
+    if (!existingProduct) throw new NotFoundException('Product not found');
+    
+    // Get isActive status separately to avoid Prisma type issues
+    const productStatus = await this.db.product.findUnique({
+      where: { id },
+      select: { isActive: true },
+    });
+    
+    // Get product details for section cleanup if needed
+    const productDetails = dto.isActive === false ? await this.db.product.findUnique({
+      where: { id },
+      select: {
+        images: {
+          select: { url: true },
+          orderBy: { position: 'asc' },
+          take: 1,
+        },
+        translations: {
+          select: { name: true, locale: true },
+          where: { locale: 'en' },
+          take: 1,
+        },
+      },
+    }) : null;
+    
+    const existing = { ...existingProduct, isActive: productStatus?.isActive };
 
     // Validate brand, category, and tags in parallel (only if provided)
     const validations = await Promise.all([
@@ -337,6 +373,15 @@ export class ProductsService {
     }
 
     const updateData: any = {};
+    
+    // Check if product is being deactivated
+    const wasActive = existing.isActive !== false;
+    const willBeInactive = dto.isActive === false;
+
+    // Update isActive status
+    if (dto.isActive !== undefined) {
+      updateData.isActive = dto.isActive;
+    }
 
     // Update brand
     if (dto.brandId !== undefined) {
@@ -422,6 +467,13 @@ export class ProductsService {
     }
 
     const updatedProduct = await this.findOne(id);
+    
+    // If product was just deactivated, remove it from all sections
+    if (wasActive && willBeInactive && productDetails) {
+      const productImageUrl = productDetails.images?.[0]?.url || null;
+      const productName = productDetails.translations?.[0]?.name || null;
+      await this.removeProductFromSections(id, productImageUrl, productName);
+    }
     
     // Audit log: Product updated
     await this.auditLog.logSuccess({

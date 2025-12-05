@@ -1,4 +1,4 @@
-import { IsString, IsInt, IsArray, IsOptional, IsNotEmpty, ArrayMinSize } from 'class-validator';
+import { IsString, IsInt, IsArray, IsOptional, IsNotEmpty, ArrayMinSize, IsBoolean } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreateProductDto {
@@ -37,5 +37,10 @@ export class CreateProductDto {
   @IsString()
   @IsOptional()
   imageUrl?: string;
+
+  @IsBoolean()
+  @Type(() => Boolean)
+  @IsOptional()
+  isActive?: boolean;
 }
 
