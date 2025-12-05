@@ -4,12 +4,16 @@ import { CreateSectionDto, SectionTranslationInput } from './dto/create-section.
 import { UpdateSectionDto } from './dto/update-section.dto';
 import { PaginationDto } from './dto/pagination.dto';
 import { Prisma } from '@prisma/client';
+import { AuditLogService, AuditAction } from '../common/services/audit-log.service';
 
 @Injectable()
 export class SectionsService {
-  constructor(private readonly db: DatabaseService) {}
+  constructor(
+    private readonly db: DatabaseService,
+    private readonly auditLog: AuditLogService,
+  ) {}
 
-  async create(dto: CreateSectionDto) {
+  async create(dto: CreateSectionDto, performedBy?: number, ipAddress?: string, userAgent?: string) {
     const { name, pageId, translations } = dto;
     
     // Check if page exists
@@ -19,7 +23,7 @@ export class SectionsService {
     }
 
     try {
-      return await this.db.section.create({
+      const section = await this.db.section.create({
         data: {
           name,
           pageId,
@@ -29,6 +33,22 @@ export class SectionsService {
         },
         include: { translations: true },
       });
+
+      // Audit log: Section created
+      await this.auditLog.logSuccess({
+        userId: performedBy,
+        action: AuditAction.RESOURCE_CREATED,
+        resource: 'Section',
+        resourceId: section.id,
+        details: {
+          name,
+          pageId,
+        },
+        ipAddress,
+        userAgent,
+      });
+
+      return section;
     } catch (error) {
       // Handle Prisma unique constraint violations
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
@@ -89,7 +109,7 @@ export class SectionsService {
     return section;
   }
 
-  async update(id: number, dto: UpdateSectionDto) {
+  async update(id: number, dto: UpdateSectionDto, performedBy?: number, ipAddress?: string, userAgent?: string) {
     await this.ensureExists(id);
 
     const { name, translations } = dto;
@@ -130,17 +150,54 @@ export class SectionsService {
       }
     }
 
-    return this.findOne(id);
+    const result = await this.findOne(id);
+
+    // Audit log: Section updated
+    await this.auditLog.logSuccess({
+      userId: performedBy,
+      action: AuditAction.RESOURCE_UPDATED,
+      resource: 'Section',
+      resourceId: id,
+      details: {
+        changes: dto,
+      },
+      ipAddress,
+      userAgent,
+    });
+
+    return result;
   }
 
-  async remove(id: number) {
-    await this.ensureExists(id);
-    return this.db.section.delete({ where: { id } });
+  async remove(id: number, performedBy?: number, ipAddress?: string, userAgent?: string) {
+    const section = await this.ensureExists(id);
+    const sectionData = await this.db.section.findUnique({ 
+      where: { id }, 
+      select: { id: true, name: true, pageId: true } 
+    });
+    
+    await this.db.section.delete({ where: { id } });
+
+    // Audit log: Section deleted
+    await this.auditLog.logSuccess({
+      userId: performedBy,
+      action: AuditAction.RESOURCE_DELETED,
+      resource: 'Section',
+      resourceId: id,
+      details: {
+        name: sectionData?.name,
+        pageId: sectionData?.pageId,
+      },
+      ipAddress,
+      userAgent,
+    });
+
+    return { message: 'Section deleted successfully' };
   }
 
   private async ensureExists(id: number) {
     const exists = await this.db.section.findUnique({ where: { id }, select: { id: true } });
     if (!exists) throw new NotFoundException('Section not found');
+    return exists;
   }
 }
 

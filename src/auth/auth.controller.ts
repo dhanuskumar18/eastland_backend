@@ -156,10 +156,11 @@ export class AuthController {
   async logout(
     @GetUser("id") userId: number,
     @GetUser("sessionId") sessionId: string,
-    @Res() res: Response
+    @Res() res: Response,
+    @Req() req: Request
   ) {
     try {
-      const result = await this.authService.logout(userId, res, sessionId);
+      const result = await this.authService.logout(userId, res, req, sessionId);
       return res.json(result);
     } catch (error) {
       return res.status(error.status || 500).json({

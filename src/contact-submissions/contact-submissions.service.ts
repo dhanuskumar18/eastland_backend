@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { CreateContactSubmissionDto } from './dto/create-contact-submission.dto';
 import { PaginationDto } from '../testimonials/dto/pagination.dto';
+import { AuditLogService, AuditAction } from '../common/services/audit-log.service';
 
 @Injectable()
 export class ContactSubmissionsService {
@@ -9,9 +10,10 @@ export class ContactSubmissionsService {
 
   constructor(
     private readonly db: DatabaseService,
+    private readonly auditLog: AuditLogService,
   ) {}
 
-  async create(dto: CreateContactSubmissionDto) {
+  async create(dto: CreateContactSubmissionDto, performedBy?: number, ipAddress?: string, userAgent?: string) {
     const submission = await this.db.contactSubmission.create({
       data: {
         name: dto.name,
@@ -21,6 +23,21 @@ export class ContactSubmissionsService {
         message: dto.message,
         customFields: dto.customFields ? JSON.stringify(dto.customFields) : null,
       },
+    });
+
+    // Audit log: Contact submission created (public submission, so performedBy may be null)
+    await this.auditLog.logSuccess({
+      userId: performedBy,
+      action: AuditAction.RESOURCE_CREATED,
+      resource: 'ContactSubmission',
+      resourceId: submission.id,
+      details: {
+        name: dto.name,
+        email: dto.email,
+        subject: dto.subject,
+      },
+      ipAddress,
+      userAgent,
     });
 
     return {
@@ -139,9 +156,10 @@ export class ContactSubmissionsService {
     };
   }
 
-  async remove(id: number) {
+  async remove(id: number, performedBy?: number, ipAddress?: string, userAgent?: string) {
     const existing = await this.db.contactSubmission.findUnique({
       where: { id },
+      select: { id: true, name: true, email: true, subject: true },
     });
 
     if (!existing) {
@@ -149,6 +167,21 @@ export class ContactSubmissionsService {
     }
 
     await this.db.contactSubmission.delete({ where: { id } });
+
+    // Audit log: Contact submission deleted
+    await this.auditLog.logSuccess({
+      userId: performedBy,
+      action: AuditAction.RESOURCE_DELETED,
+      resource: 'ContactSubmission',
+      resourceId: id,
+      details: {
+        name: existing.name,
+        email: existing.email,
+        subject: existing.subject,
+      },
+      ipAddress,
+      userAgent,
+    });
 
     return {
       status: true,
@@ -203,9 +236,10 @@ export class ContactSubmissionsService {
     return result;
   }
 
-  async markAsRead(id: number) {
+  async markAsRead(id: number, performedBy?: number, ipAddress?: string, userAgent?: string) {
     const existing = await this.db.contactSubmission.findUnique({
       where: { id },
+      select: { id: true, name: true, email: true, subject: true },
     });
 
     if (!existing) {
@@ -217,6 +251,21 @@ export class ContactSubmissionsService {
       data: { isRead: true },
     });
 
+    // Audit log: Contact submission marked as read
+    await this.auditLog.logSuccess({
+      userId: performedBy,
+      action: AuditAction.RESOURCE_UPDATED,
+      resource: 'ContactSubmission',
+      resourceId: id,
+      details: {
+        action: 'marked_as_read',
+        name: existing.name,
+        email: existing.email,
+      },
+      ipAddress,
+      userAgent,
+    });
+
     return {
       status: true,
       code: 200,
@@ -224,10 +273,24 @@ export class ContactSubmissionsService {
     };
   }
 
-  async markAllAsRead() {
-    await this.db.contactSubmission.updateMany({
+  async markAllAsRead(performedBy?: number, ipAddress?: string, userAgent?: string) {
+    const result = await this.db.contactSubmission.updateMany({
       where: { isRead: false },
       data: { isRead: true },
+    });
+
+    // Audit log: All contact submissions marked as read
+    await this.auditLog.logSuccess({
+      userId: performedBy,
+      action: AuditAction.RESOURCE_UPDATED,
+      resource: 'ContactSubmission',
+      resourceId: undefined,
+      details: {
+        action: 'marked_all_as_read',
+        count: result.count,
+      },
+      ipAddress,
+      userAgent,
     });
 
     return {

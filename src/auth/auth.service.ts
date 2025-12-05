@@ -868,7 +868,7 @@ export class AuthService {
    * - Clears cookies (refreshToken, csrf-token)
    * - Users can explicitly terminate their active session through logout
    */
-  async logout(userId: number, res: Response, sessionId?: string): Promise<{ message: string }> {
+  async logout(userId: number, res: Response, req: Request, sessionId?: string): Promise<{ message: string }> {
     if (sessionId) {
       // Revoke specific session - server-side session identifier properly invalidated
       await this.sessionService.revokeSession(sessionId, userId);
@@ -896,6 +896,18 @@ export class AuthService {
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
     });
+
+    // Log logout event to audit log
+    await this.auditLog.logAuth(
+      AuditAction.LOGOUT,
+      userId,
+      true,
+      {
+        ipAddress: req.ip || req.socket.remoteAddress,
+        userAgent: req.get('user-agent'),
+        additionalInfo: { sessionId: sessionId || 'all sessions' },
+      }
+    );
 
     return { message: 'Logged out successfully' };
   }

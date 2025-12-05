@@ -4,12 +4,16 @@ import { CreateYouTubeVideoDto } from './dto/create-youtube-video.dto';
 import { UpdateYouTubeVideoDto } from './dto/update-youtube-video.dto';
 import { PaginationDto } from '../brand/dto/pagination.dto';
 import { YouTubeVideoFilterDto } from './dto/filter.dto';
+import { AuditLogService, AuditAction } from '../common/services/audit-log.service';
 
 @Injectable()
 export class YouTubeVideosService {
-  constructor(private readonly db: DatabaseService) {}
+  constructor(
+    private readonly db: DatabaseService,
+    private readonly auditLog: AuditLogService,
+  ) {}
 
-  async create(dto: CreateYouTubeVideoDto) {
+  async create(dto: CreateYouTubeVideoDto, performedBy?: number, ipAddress?: string, userAgent?: string) {
     // Validate brand exists
     const brand = await this.db.brand.findUnique({ where: { id: dto.brandId } });
     if (!brand) throw new NotFoundException('Brand not found');
@@ -73,7 +77,24 @@ export class YouTubeVideosService {
       },
     });
 
-    return this.formatYouTubeVideoResponse(youtubeVideo);
+    const formattedVideo = this.formatYouTubeVideoResponse(youtubeVideo);
+    
+    // Audit log: YouTube video created
+    await this.auditLog.logSuccess({
+      userId: performedBy,
+      action: AuditAction.RESOURCE_CREATED,
+      resource: 'YouTubeVideo',
+      resourceId: youtubeVideo.id,
+      details: {
+        name: dto.name,
+        youtubeLink: dto.youtubeLink,
+        brandId: dto.brandId,
+      },
+      ipAddress,
+      userAgent,
+    });
+
+    return formattedVideo;
   }
 
   private formatYouTubeVideoResponse(video: any) {
@@ -209,7 +230,7 @@ export class YouTubeVideosService {
     return this.formatYouTubeVideoResponse(youtubeVideo);
   }
 
-  async update(id: number, dto: UpdateYouTubeVideoDto) {
+  async update(id: number, dto: UpdateYouTubeVideoDto, performedBy?: number, ipAddress?: string, userAgent?: string) {
     const existing = await this.db.youTubeVideo.findUnique({
       where: { id },
       include: { categories: true, tags: true },
@@ -334,16 +355,53 @@ export class YouTubeVideosService {
       });
     }
 
-    return this.findOne(id);
-  }
-
-  async remove(id: number) {
-    const existing = await this.db.youTubeVideo.findUnique({
-      where: { id },
-      select: { id: true },
+    const updatedVideo = await this.findOne(id);
+    
+    // Audit log: YouTube video updated
+    await this.auditLog.logSuccess({
+      userId: performedBy,
+      action: AuditAction.RESOURCE_UPDATED,
+      resource: 'YouTubeVideo',
+      resourceId: id,
+      details: {
+        changes: dto,
+      },
+      ipAddress,
+      userAgent,
     });
 
-    if (!existing) throw new NotFoundException('YouTube video not found');
+    return updatedVideo;
+  }
+
+  async remove(id: number, performedBy?: number, ipAddress?: string, userAgent?: string) {
+    // Get video details BEFORE deleting (needed for matching in sections)
+    const video = await this.db.youTubeVideo.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        youtubeLink: true,
+        images: {
+          select: { url: true },
+          orderBy: { position: 'asc' },
+          take: 1,
+        },
+        translations: {
+          select: { name: true, locale: true },
+          where: { locale: 'en' },
+          take: 1,
+        },
+      },
+    });
+
+    if (!video) throw new NotFoundException('YouTube video not found');
+
+    // Extract video details for fallback matching
+    const videoYoutubeLink = video.youtubeLink || null;
+    const videoImageUrl = video.images?.[0]?.url || null;
+    const videoName = video.translations?.[0]?.name || null;
+
+    // Remove YouTube video references from page sections BEFORE deleting
+    await this.removeYouTubeVideoFromSections(id, videoYoutubeLink, videoImageUrl, videoName);
 
     // Delete related records first (due to foreign key constraints)
     // Delete translations
@@ -357,7 +415,134 @@ export class YouTubeVideosService {
     });
 
     // Delete the YouTube video (many-to-many relations will be handled automatically)
-    return this.db.youTubeVideo.delete({ where: { id } });
+    const result = await this.db.youTubeVideo.delete({ where: { id } });
+    
+    // Audit log: YouTube video deleted
+    await this.auditLog.logSuccess({
+      userId: performedBy,
+      action: AuditAction.RESOURCE_DELETED,
+      resource: 'YouTubeVideo',
+      resourceId: id,
+      details: {
+        youtubeLink: videoYoutubeLink,
+        name: videoName,
+      },
+      ipAddress,
+      userAgent,
+    });
+
+    return result;
+  }
+
+  /**
+   * Remove YouTube video references from all page sections
+   * Uses youtubeVideoId as primary match, falls back to youtubeLink, image URL, or title if youtubeVideoId is missing
+   */
+  private async removeYouTubeVideoFromSections(
+    youtubeVideoId: number,
+    youtubeLink: string | null,
+    imageUrl: string | null,
+    videoName: string | null,
+  ) {
+    try {
+      console.log(`Starting removal of YouTube video ${youtubeVideoId} from sections (link: ${youtubeLink}, image: ${imageUrl}, name: ${videoName})`);
+      
+      // Get all section translations
+      const translations = await this.db.sectionTranslation.findMany({
+        select: { id: true, content: true },
+      });
+
+      console.log(`Found ${translations.length} section translations to check`);
+
+      let totalRemoved = 0;
+      // Process each translation
+      for (const translation of translations) {
+        const content = translation.content as any;
+        let updated = false;
+
+        // Check if content has videos array (video section)
+        if (content?.videos && Array.isArray(content.videos)) {
+          const originalLength = content.videos.length;
+          
+          // Remove videos that reference this YouTube video
+          // Primary match: youtubeVideoId
+          // Fallback match: youtubeLink, image URL, or title (for legacy videos without youtubeVideoId)
+          content.videos = content.videos.filter(
+            (video: any) => {
+              const videoYoutubeVideoId = video?.youtubeVideoId || video?.id;
+              const videoLink = video?.video || video?.youtubeLink;
+              const videoImage = video?.image;
+              const videoTitle = video?.title || video?.name;
+              
+              // Primary match: Check by youtubeVideoId
+              if (videoYoutubeVideoId != null && videoYoutubeVideoId !== undefined) {
+                const matchesById = String(videoYoutubeVideoId) === String(youtubeVideoId) || 
+                                  Number(videoYoutubeVideoId) === Number(youtubeVideoId);
+                if (matchesById) {
+                  console.log(`Removing video with youtubeVideoId ${videoYoutubeVideoId} (matches ${youtubeVideoId})`);
+                  return false; // Remove this video
+                }
+                return true; // Keep this video (different youtubeVideoId)
+              }
+              
+              // Fallback match: Check by YouTube link
+              if (youtubeLink && videoLink) {
+                const linkMatches = videoLink === youtubeLink || 
+                                  videoLink.includes(youtubeLink.split('=').pop() || '') ||
+                                  youtubeLink.includes(videoLink.split('=').pop() || '');
+                if (linkMatches) {
+                  console.log(`Removing video with matching YouTube link: ${videoLink}`);
+                  return false; // Remove this video
+                }
+              }
+              
+              // Fallback match: Check by image URL
+              if (imageUrl && videoImage) {
+                const imageMatches = videoImage === imageUrl || 
+                                   videoImage.includes(imageUrl.split('/').pop() || '') ||
+                                   imageUrl.includes(videoImage.split('/').pop() || '');
+                if (imageMatches) {
+                  console.log(`Removing video with matching image URL: ${videoImage}`);
+                  return false; // Remove this video
+                }
+              }
+              
+              // Fallback match: Check by title/name
+              if (videoName && videoTitle) {
+                const nameMatches = videoTitle.toLowerCase().trim() === videoName.toLowerCase().trim();
+                if (nameMatches) {
+                  console.log(`Removing video with matching title: ${videoTitle}`);
+                  return false; // Remove this video
+                }
+              }
+              
+              // Keep video if no matches found
+              return true;
+            },
+          );
+          
+          if (content.videos.length !== originalLength) {
+            updated = true;
+            totalRemoved += (originalLength - content.videos.length);
+            console.log(`Translation ${translation.id}: Removed ${originalLength - content.videos.length} video(s)`);
+          }
+        }
+
+        // Update translation if changes were made
+        if (updated) {
+          await this.db.sectionTranslation.update({
+            where: { id: translation.id },
+            data: { content: content },
+          });
+          console.log(`Translation ${translation.id}: Updated successfully`);
+        }
+      }
+      
+      console.log(`Completed: Removed YouTube video ${youtubeVideoId} from ${totalRemoved} video(s) across all sections`);
+    } catch (error) {
+      // Log error but don't fail the deletion
+      console.error(`Error removing YouTube video ${youtubeVideoId} from sections:`, error);
+    }
   }
 
   private isValidYouTubeUrl(url: string): boolean {

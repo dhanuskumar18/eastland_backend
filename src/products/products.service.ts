@@ -4,6 +4,7 @@ import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { PaginationDto } from '../brand/dto/pagination.dto';
 import { ProductFilterDto } from './dto/filter.dto';
+import { AuditLogService, AuditAction } from '../common/services/audit-log.service';
 
 @Injectable()
 export class ProductsService {
@@ -11,9 +12,10 @@ export class ProductsService {
   
   constructor(
     private readonly db: DatabaseService,
+    private readonly auditLog: AuditLogService,
   ) {}
 
-  async create(dto: CreateProductDto) {
+  async create(dto: CreateProductDto, performedBy?: number, ipAddress?: string, userAgent?: string) {
     // Validate brand, category, and tags in parallel
     const [brand, category, tags] = await Promise.all([
       this.db.brand.findUnique({ 
@@ -102,6 +104,21 @@ export class ProductsService {
           select: { id: true, locale: true, name: true, slug: true, description: true }
         },
       },
+    });
+
+    // Audit log: Product created
+    await this.auditLog.logSuccess({
+      userId: performedBy,
+      action: AuditAction.RESOURCE_CREATED,
+      resource: 'Product',
+      resourceId: product.id,
+      details: {
+        sku: product.sku,
+        name: dto.name,
+        brandId: product.brandId,
+      },
+      ipAddress,
+      userAgent,
     });
 
     return product;
@@ -277,7 +294,7 @@ export class ProductsService {
     return product;
   }
 
-  async update(id: number, dto: UpdateProductDto) {
+  async update(id: number, dto: UpdateProductDto, performedBy?: number, ipAddress?: string, userAgent?: string) {
     const existing = await this.db.product.findUnique({
       where: { id },
       select: { 
@@ -404,16 +421,52 @@ export class ProductsService {
       });
     }
 
-    return this.findOne(id);
-  }
-
-  async remove(id: number) {
-    const existing = await this.db.product.findUnique({
-      where: { id },
-      select: { id: true },
+    const updatedProduct = await this.findOne(id);
+    
+    // Audit log: Product updated
+    await this.auditLog.logSuccess({
+      userId: performedBy,
+      action: AuditAction.RESOURCE_UPDATED,
+      resource: 'Product',
+      resourceId: id,
+      details: {
+        changes: dto,
+      },
+      ipAddress,
+      userAgent,
     });
 
-    if (!existing) throw new NotFoundException('Product not found');
+    return updatedProduct;
+  }
+
+  async remove(id: number, performedBy?: number, ipAddress?: string, userAgent?: string) {
+    // Get product details BEFORE deleting (needed for matching in sections)
+    const product = await this.db.product.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        sku: true,
+        images: {
+          select: { url: true },
+          orderBy: { position: 'asc' },
+          take: 1,
+        },
+        translations: {
+          select: { name: true, locale: true },
+          where: { locale: 'en' },
+          take: 1,
+        },
+      },
+    });
+
+    if (!product) throw new NotFoundException('Product not found');
+
+    // Extract product image URL and name for fallback matching
+    const productImageUrl = product.images?.[0]?.url || null;
+    const productName = product.translations?.[0]?.name || null;
+
+    // Remove product references from page sections BEFORE deleting the product
+    await this.removeProductFromSections(id, productImageUrl, productName);
 
     // Delete related records first (due to foreign key constraints)
     // Delete translations
@@ -429,7 +482,115 @@ export class ProductsService {
     // Delete the product (many-to-many relations will be handled automatically)
     const result = await this.db.product.delete({ where: { id } });
 
+    // Audit log: Product deleted
+    await this.auditLog.logSuccess({
+      userId: performedBy,
+      action: AuditAction.RESOURCE_DELETED,
+      resource: 'Product',
+      resourceId: id,
+      details: {
+        sku: product.sku,
+        name: productName,
+      },
+      ipAddress,
+      userAgent,
+    });
+
     return result;
+  }
+
+  /**
+   * Remove product references from all page sections
+   * Uses productId as primary match, falls back to image URL or title if productId is missing
+   */
+  private async removeProductFromSections(productId: number, productImageUrl: string | null, productName: string | null) {
+    try {
+      this.logger.log(`Starting removal of product ${productId} from sections (image: ${productImageUrl}, name: ${productName})`);
+      
+      // Get all section translations
+      const translations = await this.db.sectionTranslation.findMany({
+        select: { id: true, content: true },
+      });
+
+      this.logger.log(`Found ${translations.length} section translations to check`);
+
+      let totalRemoved = 0;
+      // Process each translation
+      for (const translation of translations) {
+        const content = translation.content as any;
+        let updated = false;
+
+        // Check if content has cards array (products section)
+        if (content?.cards && Array.isArray(content.cards)) {
+          const originalLength = content.cards.length;
+          
+          // Remove cards that reference this product
+          // Primary match: productId
+          // Fallback match: image URL or title (for legacy cards without productId)
+          content.cards = content.cards.filter(
+            (card: any) => {
+              const cardProductId = card?.productId;
+              const cardImage = card?.image;
+              const cardTitle = card?.title;
+              
+              // Primary match: Check by productId
+              if (cardProductId != null && cardProductId !== undefined) {
+                const matchesById = String(cardProductId) === String(productId) || 
+                                  Number(cardProductId) === Number(productId);
+                if (matchesById) {
+                  this.logger.log(`Removing card with productId ${cardProductId} (matches ${productId})`);
+                  return false; // Remove this card
+                }
+                return true; // Keep this card (different productId)
+              }
+              
+              // Fallback match: Check by image URL (for legacy cards without productId)
+              if (productImageUrl && cardImage) {
+                const imageMatches = cardImage === productImageUrl || 
+                                   cardImage.includes(productImageUrl.split('/').pop() || '') ||
+                                   productImageUrl.includes(cardImage.split('/').pop() || '');
+                if (imageMatches) {
+                  this.logger.log(`Removing card with matching image URL: ${cardImage}`);
+                  return false; // Remove this card
+                }
+              }
+              
+              // Fallback match: Check by title/name (for legacy cards without productId)
+              if (productName && cardTitle) {
+                const nameMatches = cardTitle.toLowerCase().trim() === productName.toLowerCase().trim();
+                if (nameMatches) {
+                  this.logger.log(`Removing card with matching title: ${cardTitle}`);
+                  return false; // Remove this card
+                }
+              }
+              
+              // Keep card if no matches found
+              return true;
+            },
+          );
+          
+          if (content.cards.length !== originalLength) {
+            updated = true;
+            totalRemoved += (originalLength - content.cards.length);
+            this.logger.log(`Translation ${translation.id}: Removed ${originalLength - content.cards.length} card(s)`);
+          }
+        }
+
+        // Update translation if changes were made
+        if (updated) {
+          await this.db.sectionTranslation.update({
+            where: { id: translation.id },
+            data: { content: content },
+          });
+          this.logger.log(`Translation ${translation.id}: Updated successfully`);
+        }
+      }
+      
+      this.logger.log(`Completed: Removed product ${productId} from ${totalRemoved} card(s) across all sections`);
+    } catch (error) {
+      // Log error but don't fail the deletion
+      this.logger.error(`Error removing product ${productId} from sections:`, error);
+    }
   }
 
   private generateSKU(name: string): string {

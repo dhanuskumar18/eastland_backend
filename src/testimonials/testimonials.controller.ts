@@ -31,8 +31,14 @@ export class TestimonialsController {
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   @Header('Pragma', 'no-cache')
   @Header('Expires', '0')
-  async create(@Body() dto: CreateTestimonialDto) {
-    return this.testimonialsService.create(dto);
+  async create(@Body() dto: CreateTestimonialDto, @Req() req: Request) {
+    const userId = (req.user as any)?.id;
+    return this.testimonialsService.create(
+      dto,
+      userId,
+      req.ip || req.socket.remoteAddress,
+      req.get('user-agent')
+    );
   }
 
   @Get()
@@ -76,15 +82,29 @@ export class TestimonialsController {
   async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateTestimonialDto,
+    @Req() req: Request,
   ) {
-    return this.testimonialsService.update(id, dto);
+    const userId = (req.user as any)?.id;
+    return this.testimonialsService.update(
+      id,
+      dto,
+      userId,
+      req.ip || req.socket.remoteAddress,
+      req.get('user-agent')
+    );
   }
 
   @Delete(':id')
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   @Header('Pragma', 'no-cache')
   @Header('Expires', '0')
-  remove(@Param('id', ParseIntPipe) id: number) {
-    return this.testimonialsService.remove(id);
+  remove(@Param('id', ParseIntPipe) id: number, @Req() req: Request) {
+    const userId = (req.user as any)?.id;
+    return this.testimonialsService.remove(
+      id,
+      userId,
+      req.ip || req.socket.remoteAddress,
+      req.get('user-agent')
+    );
   }
 }

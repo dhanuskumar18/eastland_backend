@@ -3,6 +3,7 @@ import { DatabaseService } from '../database/database.service';
 import { CategoryForDto, CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 import { PaginationDto } from './dto/pagination.dto';
+import { AuditLogService, AuditAction } from '../common/services/audit-log.service';
 
 type CategoryListItem = { id: number; name: string; for: CategoryForDto };
 
@@ -12,11 +13,26 @@ export class CategoryService {
 
   constructor(
     private readonly db: DatabaseService,
+    private readonly auditLog: AuditLogService,
   ) {}
 
-  async create(dto: CreateCategoryDto) {
+  async create(dto: CreateCategoryDto, performedBy?: number, ipAddress?: string, userAgent?: string) {
     const type = this.mapForToType(dto.for);
     const category = await (this.db as any).category.create({ data: { name: dto.name, type: type as any } as any });
+    
+    // Audit log: Category created
+    await this.auditLog.logSuccess({
+      userId: performedBy,
+      action: AuditAction.RESOURCE_CREATED,
+      resource: 'Category',
+      resourceId: category.id,
+      details: {
+        name: dto.name,
+        type: dto.for,
+      },
+      ipAddress,
+      userAgent,
+    });
     
     return category;
   }
@@ -82,10 +98,10 @@ export class CategoryService {
     return row;
   }
 
-  async update(id: number, dto: UpdateCategoryDto) {
+  async update(id: number, dto: UpdateCategoryDto, performedBy?: number, ipAddress?: string, userAgent?: string) {
     const existing = await (this.db as any).category.findUnique({ 
       where: { id },
-      select: { id: true }
+      select: { id: true, name: true }
     });
     if (!existing) throw new NotFoundException('Category not found');
 
@@ -101,12 +117,26 @@ export class CategoryService {
     
     const updated = await (this.db as any).category.update({ where: { id }, data: data as any });
     
+    // Audit log: Category updated
+    await this.auditLog.logSuccess({
+      userId: performedBy,
+      action: AuditAction.RESOURCE_UPDATED,
+      resource: 'Category',
+      resourceId: id,
+      details: {
+        changes: dto,
+        oldName: existing.name,
+      },
+      ipAddress,
+      userAgent,
+    });
+    
     return updated;
   }
 
-  async remove(id: number, forType: CategoryForDto) {
+  async remove(id: number, forType: CategoryForDto, performedBy?: number, ipAddress?: string, userAgent?: string) {
     const type = this.mapForToType(forType);
-    const exists = await (this.db as any).category.findFirst({ where: { id, type: type as any } as any, select: { id: true } });
+    const exists = await (this.db as any).category.findFirst({ where: { id, type: type as any } as any, select: { id: true, name: true } });
     if (!exists) {
       if (forType === CategoryForDto.VIDEO) throw new NotFoundException('Video category not found');
       if (forType === CategoryForDto.PRODUCT) throw new NotFoundException('Product category not found');
@@ -114,6 +144,20 @@ export class CategoryService {
     }
     
     const result = await (this.db as any).category.delete({ where: { id } });
+    
+    // Audit log: Category deleted
+    await this.auditLog.logSuccess({
+      userId: performedBy,
+      action: AuditAction.RESOURCE_DELETED,
+      resource: 'Category',
+      resourceId: id,
+      details: {
+        name: exists.name,
+        type: forType,
+      },
+      ipAddress,
+      userAgent,
+    });
     
     return result;
   }

@@ -9,7 +9,9 @@ import {
   Query,
   UseGuards,
   Header,
+  Req,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import { ContactSubmissionsService } from './contact-submissions.service';
 import { CreateContactSubmissionDto } from './dto/create-contact-submission.dto';
 import { PaginationDto } from '../testimonials/dto/pagination.dto';
@@ -27,8 +29,14 @@ export class ContactSubmissionsController {
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   @Header('Pragma', 'no-cache')
   @Header('Expires', '0')
-  async create(@Body() dto: CreateContactSubmissionDto) {
-    return this.contactSubmissionsService.create(dto);
+  async create(@Body() dto: CreateContactSubmissionDto, @Req() req: Request) {
+    const userId = (req.user as any)?.id;
+    return this.contactSubmissionsService.create(
+      dto,
+      userId,
+      req.ip || req.socket.remoteAddress,
+      req.get('user-agent')
+    );
   }
 
   @UseGuards(JwtGuard)
@@ -65,8 +73,13 @@ export class ContactSubmissionsController {
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   @Header('Pragma', 'no-cache')
   @Header('Expires', '0')
-  markAllAsRead() {
-    return this.contactSubmissionsService.markAllAsRead();
+  markAllAsRead(@Req() req: Request) {
+    const userId = (req.user as any)?.id;
+    return this.contactSubmissionsService.markAllAsRead(
+      userId,
+      req.ip || req.socket.remoteAddress,
+      req.get('user-agent')
+    );
   }
 
   // Parameterized routes come last
@@ -84,8 +97,14 @@ export class ContactSubmissionsController {
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   @Header('Pragma', 'no-cache')
   @Header('Expires', '0')
-  remove(@Param('id', ParseIntPipe) id: number) {
-    return this.contactSubmissionsService.remove(id);
+  remove(@Param('id', ParseIntPipe) id: number, @Req() req: Request) {
+    const userId = (req.user as any)?.id;
+    return this.contactSubmissionsService.remove(
+      id,
+      userId,
+      req.ip || req.socket.remoteAddress,
+      req.get('user-agent')
+    );
   }
 
   @UseGuards(JwtGuard)
@@ -93,8 +112,14 @@ export class ContactSubmissionsController {
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   @Header('Pragma', 'no-cache')
   @Header('Expires', '0')
-  markAsRead(@Param('id', ParseIntPipe) id: number) {
-    return this.contactSubmissionsService.markAsRead(id);
+  markAsRead(@Param('id', ParseIntPipe) id: number, @Req() req: Request) {
+    const userId = (req.user as any)?.id;
+    return this.contactSubmissionsService.markAsRead(
+      id,
+      userId,
+      req.ip || req.socket.remoteAddress,
+      req.get('user-agent')
+    );
   }
 }
 
