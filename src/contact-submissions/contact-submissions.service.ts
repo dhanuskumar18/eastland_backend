@@ -284,7 +284,7 @@ export class ContactSubmissionsService {
       userId: performedBy,
       action: AuditAction.RESOURCE_UPDATED,
       resource: 'ContactSubmission',
-      resourceId: null,
+      resourceId: undefined,
       details: {
         action: 'marked_all_as_read',
         count: result.count,

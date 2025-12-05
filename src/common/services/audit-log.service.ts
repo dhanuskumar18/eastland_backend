@@ -87,20 +87,20 @@ export class AuditLogService {
    * Create an audit log entry
    */
   async log(data: AuditLogData): Promise<void> {
-    try {
-      // Sanitize all inputs before logging
-      const sanitizedData = {
-        userId: data.userId || null,
-        action: LogSanitizer.sanitizeMessage(data.action, 100),
-        resource: data.resource ? LogSanitizer.sanitizeMessage(data.resource, 100) : null,
-        resourceId: data.resourceId ? this.sanitizeResourceId(data.resourceId) : null,
-        details: data.details ? LogSanitizer.sanitizeObject(data.details, 3) : null,
-        ipAddress: data.ipAddress ? LogSanitizer.sanitizeMessage(data.ipAddress, 45) : null,
-        userAgent: data.userAgent ? LogSanitizer.sanitizeMessage(data.userAgent, 200) : null,
-        status: data.status || 'SUCCESS',
-        errorMessage: data.errorMessage ? LogSanitizer.sanitizeMessage(data.errorMessage, 500) : null,
-      };
+    // Sanitize all inputs before logging
+    const sanitizedData = {
+      userId: data.userId || null,
+      action: LogSanitizer.sanitizeMessage(data.action, 100),
+      resource: data.resource ? LogSanitizer.sanitizeMessage(data.resource, 100) : null,
+      resourceId: data.resourceId ? this.sanitizeResourceId(data.resourceId) : null,
+      details: data.details ? LogSanitizer.sanitizeObject(data.details, 3) : null,
+      ipAddress: data.ipAddress ? LogSanitizer.sanitizeMessage(data.ipAddress, 45) : null,
+      userAgent: data.userAgent ? LogSanitizer.sanitizeMessage(data.userAgent, 200) : null,
+      status: data.status || 'SUCCESS',
+      errorMessage: data.errorMessage ? LogSanitizer.sanitizeMessage(data.errorMessage, 500) : null,
+    };
 
+    try {
       await this.prisma.auditLog.create({
         data: sanitizedData,
       });
@@ -112,7 +112,18 @@ export class AuditLogService {
     } catch (error) {
       // CRITICAL: Never let audit logging failure break the application
       // But log the failure for investigation
-      this.logger.error(`Failed to create audit log: ${error.message}`, error.stack);
+      this.logger.error(
+        `[AUDIT LOG ERROR] Failed to create audit log: ${error.message}`,
+        error.stack
+      );
+      this.logger.error(
+        `[AUDIT LOG ERROR] Action: ${data.action}, Resource: ${data.resource}, UserId: ${data.userId}`
+      );
+      // Also log to console for immediate visibility in development
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('[AUDIT LOG ERROR]', error);
+        console.error('[AUDIT LOG ERROR] Data:', sanitizedData);
+      }
     }
   }
 
