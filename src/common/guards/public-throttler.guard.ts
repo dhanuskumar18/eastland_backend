@@ -30,6 +30,7 @@ export class PublicThrottlerGuard extends ThrottlerGuard {
         '/globals',
         '/roles/permissions/all', // Skip throttling for permissions list (admin endpoint)
         '/roles', // Skip throttling for roles list (admin endpoint)
+        '/users', // Skip throttling for users list (admin endpoint)
         // '/sections', // COMMENTED OUT FOR NOW - sections edit operations should be throttled
       ];
 

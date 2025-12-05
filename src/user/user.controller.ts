@@ -11,6 +11,7 @@ import { ToggleStatusDto } from './dto/toggle-status.dto';
 import { PaginationDto } from '../brand/dto/pagination.dto';
 import { SkipCsrf } from 'src/auth/csrf';
 import { UserRole } from '@prisma/client';
+import { SkipThrottle } from '@nestjs/throttler';
 
 @SkipCsrf()
 @Controller('users')
@@ -88,6 +89,7 @@ export class UserController {
 
   @UseGuards(JwtGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
+  @SkipThrottle()
   @Get()
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   @Header('Pragma', 'no-cache')
