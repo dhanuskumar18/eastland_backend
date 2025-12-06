@@ -1,4 +1,4 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards, Header } from '@nestjs/common';
 import { AuditLogService } from '../common/services/audit-log.service';
 import { JwtGuard, RolesGuard } from '../auth/guard';
 import { Roles } from '../auth/decorator';
@@ -13,6 +13,9 @@ export class AuditLogsController {
   constructor(private readonly auditLogService: AuditLogService) {}
 
   @Get()
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+  @Header('Pragma', 'no-cache')
+  @Header('Expires', '0')
   async getAuditLogs(
     @Query('userId') userId?: string,
     @Query('action') action?: string,
