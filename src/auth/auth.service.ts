@@ -373,19 +373,26 @@ export class AuthService {
           
           // Check if this is a new device/login and send notification (non-blocking)
           // Don't await to avoid blocking login response
-          this.sessionService.getUserSessions(user.id)
-            .then((allSessions) => {
-              // If this is the only session, send new device notification
-              // Or if device/browser/IP is different from previous sessions
-              if (allSessions.length === 1 || this.isNewDeviceLogin(sessionData, allSessions)) {
-                const deviceInfo = sessionData.deviceInfo || {};
+          // Check device history (including inactive sessions) to see if this device was used before
+          this.sessionService.getUserDeviceHistory(user.id, sessionData.id)
+            .then((deviceHistory) => {
+              const deviceInfo = sessionData.deviceInfo || {};
+              const browser = (deviceInfo as any)?.browser || 'Unknown';
+              const os = (deviceInfo as any)?.os || 'Unknown';
+              const ip = sessionData.ipAddress || 'Unknown';
+              
+              // Create device signature for current login
+              const currentDeviceSignature = `${browser}-${os}-${ip}`;
+              
+              // Only send email if this device combination was never used before
+              if (!deviceHistory.has(currentDeviceSignature)) {
                 return this.emailService.sendNewDeviceLoginNotification(
                   user.email,
                   {
-                    browser: (deviceInfo as any)?.browser,
-                    os: (deviceInfo as any)?.os,
+                    browser: browser,
+                    os: os,
                     device: (deviceInfo as any)?.device,
-                    ipAddress: sessionData.ipAddress,
+                    ipAddress: ip,
                   }
                 );
               }

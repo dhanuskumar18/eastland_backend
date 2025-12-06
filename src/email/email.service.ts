@@ -765,7 +765,7 @@ export class EmailService {
         <html>
         <head>
             <meta charset="utf-8">
-            <title>Set Up Your Password</title>
+            <title>Eastland Distributors Admin Dashboard - Set Up Your Password</title>
             <style>
                 body {
                     font-family: Arial, sans-serif;
@@ -774,32 +774,60 @@ export class EmailService {
                     max-width: 600px;
                     margin: 0 auto;
                     padding: 20px;
+                    background-color: #f5f5f5;
+                }
+                .container {
+                    background-color: white;
+                    border-radius: 8px;
+                    padding: 30px;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
                 }
                 .header {
                     background-color: #017850;
                     color: white;
-                    padding: 20px;
+                    padding: 25px;
                     text-align: center;
                     border-radius: 5px;
+                    margin-bottom: 30px;
+                }
+                .header h1 {
+                    margin: 0;
+                    font-size: 24px;
+                    font-weight: bold;
+                }
+                .header p {
+                    margin: 10px 0 0 0;
+                    font-size: 14px;
+                    opacity: 0.95;
                 }
                 .button {
                     display: inline-block;
-                    background-color: #017850;
+                    background-color: #2563eb;
                     color: white;
-                    padding: 12px 30px;
+                    padding: 14px 35px;
                     text-decoration: none;
                     border-radius: 5px;
-                    margin: 20px 0;
+                    margin: 25px 0;
                     font-weight: bold;
+                    font-size: 16px;
+                    transition: background-color 0.3s;
                 }
                 .button:hover {
-                    background-color: #015a3f;
+                    background-color: #1d4ed8;
                 }
                 .info-box {
                     background-color: #f8f9fa;
                     border-left: 4px solid #017850;
-                    padding: 15px;
-                    margin: 20px 0;
+                    padding: 18px;
+                    margin: 25px 0;
+                    border-radius: 4px;
+                }
+                .info-box ul {
+                    margin: 10px 0;
+                    padding-left: 20px;
+                }
+                .info-box li {
+                    margin: 8px 0;
                 }
                 .footer {
                     margin-top: 30px;
@@ -807,38 +835,63 @@ export class EmailService {
                     border-top: 1px solid #eee;
                     font-size: 12px;
                     color: #666;
+                    text-align: center;
+                }
+                .link-text {
+                    word-break: break-all;
+                    color: #017850;
+                    font-size: 13px;
+                    margin: 15px 0;
+                }
+                .greeting {
+                    font-size: 16px;
+                    margin-bottom: 20px;
+                }
+                .content-text {
+                    margin-bottom: 15px;
+                    color: #555;
                 }
             </style>
         </head>
         <body>
-            <div class="header">
-                <h1>Welcome! Set Up Your Password</h1>
-            </div>
-            
-            <p>Hello ${name || 'there'},</p>
-            
-            <p>Your account has been created. To complete your account setup, please set up your password by clicking the button below:</p>
-            
-            <div style="text-align: center;">
-                <a href="${setupLink}" class="button">Set Up Password</a>
-            </div>
-            
-            <p>Or copy and paste this link into your browser:</p>
-            <p style="word-break: break-all; color: #017850;">${setupLink}</p>
-            
-            <div class="info-box">
-                <p><strong>Important:</strong></p>
-                <ul>
-                    <li>This link is valid for 24 hours</li>
-                    <li>Do not share this link with anyone</li>
-                    <li>If you did not expect this email, please contact support</li>
-                </ul>
-            </div>
-            
-            <p>After setting up your password, you'll be able to log in to your account.</p>
-            
-            <div class="footer">
-                <p>This is an automated message. Please do not reply to this email.</p>
+            <div class="container">
+                <div class="header">
+                    <h1>Eastland Distributors Admin Dashboard</h1>
+                    <p>You've been invited to join our team</p>
+                </div>
+                
+                <p class="greeting">Hello ${name || 'there'},</p>
+                
+                <p class="content-text">You have been invited to access the <strong>Eastland Distributors Admin Dashboard</strong>. Your account has been created and you're just one step away from getting started.</p>
+                
+                <p class="content-text">To complete your account setup and secure your access, please set up your password by clicking the button below:</p>
+                
+                <div style="text-align: center;">
+                    <a href="${setupLink}" class="button">Set Up Your Password</a>
+                </div>
+                
+                <p class="content-text" style="font-size: 14px; margin-top: 20px;">Or copy and paste this link into your browser:</p>
+                <p class="link-text">${setupLink}</p>
+                
+                <div class="info-box">
+                    <p style="margin-top: 0; font-weight: bold; color: #017850;">Important Information:</p>
+                    <ul>
+                        <li>This invitation link is valid for 24 hours from the time it was sent</li>
+                        <li>Do not share this link with anyone - it's unique to your account</li>
+                        <li>After setting your password, you'll be able to log in to the admin dashboard</li>
+                        <li>If you did not expect this invitation, please contact our support team immediately</li>
+                    </ul>
+                </div>
+                
+                <p class="content-text">Once you've set your password, you can log in to the <strong>Eastland Distributors Admin Dashboard</strong> and start managing your account.</p>
+                
+                <p class="content-text" style="margin-top: 25px;">Welcome aboard!</p>
+                
+                <div class="footer">
+                    <p><strong>Eastland Distributors</strong></p>
+                    <p>This is an automated message. Please do not reply to this email.</p>
+                    <p>If you have any questions, please contact our support team.</p>
+                </div>
             </div>
         </body>
         </html>
@@ -846,7 +899,7 @@ export class EmailService {
       
       await this.mailerService.sendMail({
         to: email,
-        subject: 'Set Up Your Password',
+        subject: 'Eastland Distributors Admin Dashboard - Set Up Your Password',
         html: htmlContent,
       });
       

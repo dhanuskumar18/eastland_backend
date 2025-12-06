@@ -168,6 +168,36 @@ export class SessionService {
   }
 
   /**
+   * Get all sessions for a user (including inactive/expired) for device history checking
+   * Returns unique device signatures that have been used before
+   */
+  async getUserDeviceHistory(userId: number, excludeSessionId?: string): Promise<Set<string>> {
+    const sessions = await this.prisma.session.findMany({
+      where: {
+        userId,
+        ...(excludeSessionId && { id: { not: excludeSessionId } }),
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 100, // Limit to last 100 sessions for performance
+    });
+
+    const deviceSignatures = new Set<string>();
+    
+    for (const session of sessions) {
+      const deviceInfo = (session.deviceInfo as any) || {};
+      const browser = deviceInfo?.browser || 'Unknown';
+      const os = deviceInfo?.os || 'Unknown';
+      const ip = session.ipAddress || 'Unknown';
+      
+      // Create a unique device signature
+      const deviceSignature = `${browser}-${os}-${ip}`;
+      deviceSignatures.add(deviceSignature);
+    }
+
+    return deviceSignatures;
+  }
+
+  /**
    * Get session by ID
    */
   async getSessionById(sessionId: string, userId: number): Promise<SessionData | null> {
