@@ -1,5 +1,5 @@
 import { IsEmail, IsNotEmpty, IsString, MinLength, MaxLength, IsEnum, IsOptional } from 'class-validator';
-import { UserRole, UserStatus } from '@prisma/client';
+import { UserStatus } from '@prisma/client';
 
 export class CreateUserDto {
   @IsNotEmpty({ message: 'Name is required' })
@@ -17,10 +17,10 @@ export class CreateUserDto {
   password?: string;
 
   @IsNotEmpty({ message: 'Role is required' })
-  @IsEnum(UserRole, {
-    message: 'Role must be either USER or ADMIN',
-  })
-  role: UserRole;
+  @IsString({ message: 'Role must be a string' })
+  @MinLength(2, { message: 'Role name must be at least 2 characters' })
+  @MaxLength(50, { message: 'Role name must not exceed 50 characters' })
+  role: string;
 
   @IsOptional()
   @IsEnum(UserStatus, {

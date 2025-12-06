@@ -1,5 +1,5 @@
-import { IsEmail, IsOptional, IsString, IsEnum } from 'class-validator';
-import { UserRole, UserStatus } from '@prisma/client';
+import { IsEmail, IsOptional, IsString, IsEnum, MinLength, MaxLength } from 'class-validator';
+import { UserStatus } from '@prisma/client';
 
 export class UpdateUserDto {
   @IsString()
@@ -10,11 +10,11 @@ export class UpdateUserDto {
   @IsOptional()
   email?: string;
 
-  @IsEnum(UserRole, {
-    message: 'Role must be either USER or ADMIN',
-  })
+  @IsString()
   @IsOptional()
-  role?: UserRole;
+  @MinLength(2, { message: 'Role name must be at least 2 characters' })
+  @MaxLength(50, { message: 'Role name must not exceed 50 characters' })
+  role?: string;
 
   @IsEnum(UserStatus, {
     message: 'Status must be either ACTIVE or INACTIVE',

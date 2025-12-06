@@ -19,8 +19,10 @@ export class AuthDto {
 
 export class SignupDto extends AuthDto {
     @IsOptional()
-    @IsEnum(['USER', 'ADMIN'], { message: 'Role must be either USER or ADMIN' })
-    role?: 'USER' | 'ADMIN';
+    @IsString()
+    @MinLength(2, { message: 'Role name must be at least 2 characters' })
+    @MaxLength(50, { message: 'Role name must not exceed 50 characters' })
+    role?: string;
 }
 
 export class TokenResponseDto {
