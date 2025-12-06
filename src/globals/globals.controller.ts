@@ -1,15 +1,19 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, ParseIntPipe, Query, Header } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, ParseIntPipe, Query, Header, UseGuards } from '@nestjs/common';
 import { GlobalsService } from './globals.service';
 import { CreateGlobalDto } from './dto/create-global.dto';
 import { UpdateGlobalDto } from './dto/update-global.dto';
 import { PaginationDto } from './dto/pagination.dto';
 import { SkipThrottle } from '@nestjs/throttler';
+import { JwtGuard, PermissionsGuard } from 'src/auth/guard';
+import { Permissions } from 'src/auth/decorator';
 
 @SkipThrottle() // Skip throttling for public global endpoints
 @Controller('globals')
 export class GlobalsController {
   constructor(private readonly globalsService: GlobalsService) {}
 
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @Permissions('global:create')
   @Post()
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   @Header('Pragma', 'no-cache')
@@ -42,6 +46,8 @@ export class GlobalsController {
     return this.globalsService.findOne(id);
   }
 
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @Permissions('global:update')
   @Patch(':id')
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   @Header('Pragma', 'no-cache')
@@ -50,6 +56,8 @@ export class GlobalsController {
     return this.globalsService.update(id, dto);
   }
 
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @Permissions('global:delete')
   @Delete(':id')
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   @Header('Pragma', 'no-cache')

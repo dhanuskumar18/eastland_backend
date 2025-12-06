@@ -29,15 +29,19 @@ import { UpdateGlobalSeoDto } from './dto/update-global-seo.dto';
 import { CreatePageSeoDto } from './dto/create-page-seo.dto';
 import { UpdatePageSeoDto } from './dto/update-page-seo.dto';
 import { SkipCsrf } from 'src/auth/csrf';
-import { JwtGuard } from 'src/auth/guard';
+import { JwtGuard, PermissionsGuard } from 'src/auth/guard';
+import { Permissions, GetUser } from 'src/auth/decorator';
 import { ValidationExceptionFilter } from './filters/validation-exception.filter';
 import { memoryStorage } from 'multer';
+import type { User } from '@prisma/client';
 
 @Controller('api/seo')
 @UseFilters(ValidationExceptionFilter)
 export class SeoController {
   constructor(private readonly seoService: SeoService) {}
 
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @Permissions('seo:update')
   @Post('optimize-image')
   @Header('Cache-Control', 'no-store')
   @UseInterceptors(
@@ -131,6 +135,8 @@ export class SeoController {
     }
   }
 
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @Permissions('seo:update')
   @Post('lazy-loading')
   @Header('Cache-Control', 'no-store')
   async saveLazyLoadingSettings(@Body() dto: LazyLoadingSettingsDto) {
@@ -147,6 +153,8 @@ export class SeoController {
   }
 
 
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @Permissions('seo:update')
   @Post('lazy-loading/sections')
   @Header('Cache-Control', 'no-store')
   async saveSectionLazyLoadingConfigs(@Body() dto: SectionLazyLoadingDto) {
@@ -194,16 +202,20 @@ export class SeoController {
     }
   }
 
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @Permissions('seo:update')
   @Post('global')
-  @UseGuards(JwtGuard)
   @HttpCode(HttpStatus.OK)
   @Header('Cache-Control', 'no-store')
-  async createOrUpdateGlobalSeo(@Body() dto: CreateGlobalSeoDto, @Req() req: Request) {
+  async createOrUpdateGlobalSeo(
+    @Body() dto: CreateGlobalSeoDto,
+    @GetUser() user: User,
+    @Req() req: Request,
+  ) {
     try {
-      const userId = (req.user as any)?.id;
       const data = await this.seoService.createOrUpdateGlobalSeo(
         dto,
-        userId,
+        user.id,
         req.ip || req.socket.remoteAddress,
         req.get('user-agent')
       );
@@ -220,16 +232,20 @@ export class SeoController {
     }
   }
 
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @Permissions('seo:update')
   @Patch('global')
-  @UseGuards(JwtGuard)
   @HttpCode(HttpStatus.OK)
   @Header('Cache-Control', 'no-store')
-  async updateGlobalSeo(@Body() dto: UpdateGlobalSeoDto, @Req() req: Request) {
+  async updateGlobalSeo(
+    @Body() dto: UpdateGlobalSeoDto,
+    @GetUser() user: User,
+    @Req() req: Request,
+  ) {
     try {
-      const userId = (req.user as any)?.id;
       const data = await this.seoService.updateGlobalSeo(
         dto,
-        userId,
+        user.id,
         req.ip || req.socket.remoteAddress,
         req.get('user-agent')
       );
@@ -318,16 +334,20 @@ export class SeoController {
     }
   }
 
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @Permissions('seo:create')
   @Post('pages')
-  @UseGuards(JwtGuard)
   @HttpCode(HttpStatus.CREATED)
   @Header('Cache-Control', 'no-store')
-  async createPageSeo(@Body() dto: CreatePageSeoDto, @Req() req: Request) {
+  async createPageSeo(
+    @Body() dto: CreatePageSeoDto,
+    @GetUser() user: User,
+    @Req() req: Request,
+  ) {
     try {
-      const userId = (req.user as any)?.id;
       const data = await this.seoService.createPageSeo(
         dto,
-        userId,
+        user.id,
         req.ip || req.socket.remoteAddress,
         req.get('user-agent')
       );
@@ -354,21 +374,22 @@ export class SeoController {
     }
   }
 
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @Permissions('seo:update')
   @Patch('pages/:pageId')
-  @UseGuards(JwtGuard)
   @HttpCode(HttpStatus.OK)
   @Header('Cache-Control', 'no-store')
   async updatePageSeo(
     @Param('pageId', ParseIntPipe) pageId: number,
     @Body() dto: UpdatePageSeoDto,
+    @GetUser() user: User,
     @Req() req: Request,
   ) {
     try {
-      const userId = (req.user as any)?.id;
       const data = await this.seoService.updatePageSeo(
         pageId,
         dto,
-        userId,
+        user.id,
         req.ip || req.socket.remoteAddress,
         req.get('user-agent')
       );

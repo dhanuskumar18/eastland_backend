@@ -53,7 +53,7 @@ export type AppAbility = MongoAbility<[Actions, Subjects]>;
  */
 export function createAbilityFromPermissions(permissions: string[]): AppAbility {
   const { can, build } = new AbilityBuilder<AppAbility>(Ability);
-
+i
   for (const perm of permissions) {
     const [resource, action] = perm.split(':');
     

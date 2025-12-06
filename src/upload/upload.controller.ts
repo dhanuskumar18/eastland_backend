@@ -7,10 +7,13 @@ import {
   UploadedFile,
   UploadedFiles,
   BadRequestException,
+  UseGuards,
 } from '@nestjs/common';
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { UploadService } from './upload.service';
 import { SkipCsrf } from 'src/auth/csrf';
+import { JwtGuard, PermissionsGuard } from 'src/auth/guard';
+import { Permissions } from 'src/auth/decorator';
 import { memoryStorage } from 'multer';
 
 @SkipCsrf()
@@ -18,6 +21,8 @@ import { memoryStorage } from 'multer';
 export class UploadController {
   constructor(private readonly uploadService: UploadService) {}
 
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @Permissions('upload:create')
   @Post('image')
   @UseInterceptors(
     FileInterceptor('image', {
@@ -45,6 +50,8 @@ export class UploadController {
     };
   }
 
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @Permissions('upload:create')
   @Post('images')
   @UseInterceptors(
     FilesInterceptor('images', 10, {
@@ -73,6 +80,8 @@ export class UploadController {
     };
   }
 
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @Permissions('upload:create')
   @Post('product-image')
   @UseInterceptors(
     FileInterceptor('image', {
@@ -96,6 +105,8 @@ export class UploadController {
     };
   }
 
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @Permissions('upload:delete')
   @Delete()
   async deleteFile(@Body('url') url: string) {
     if (!url) {

@@ -1,8 +1,8 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, ParseIntPipe, Query, Req, UseGuards, HttpCode, HttpStatus, Header } from '@nestjs/common';
 import type { User } from '@prisma/client';
 import type { Request } from 'express';
-import { JwtGuard, RolesGuard } from 'src/auth/guard';
-import { GetUser, Roles } from 'src/auth/decorator';
+import { JwtGuard, RolesGuard, PermissionsGuard } from 'src/auth/guard';
+import { GetUser, Roles, Permissions } from 'src/auth/decorator';
 import { UserService } from './user.service';
 import { RolesService } from '../roles/roles.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -60,8 +60,9 @@ export class UserController {
     };
   }
 
-  @UseGuards(JwtGuard, RolesGuard)
+  @UseGuards(JwtGuard, RolesGuard, PermissionsGuard)
   @Roles(UserRole.ADMIN)
+  @Permissions('user:create')
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
@@ -120,8 +121,9 @@ export class UserController {
     };
   }
 
-  @UseGuards(JwtGuard, RolesGuard)
+  @UseGuards(JwtGuard, RolesGuard, PermissionsGuard)
   @Roles(UserRole.ADMIN)
+  @Permissions('user:update')
   @Patch(':id/status')
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   @Header('Pragma', 'no-cache')
@@ -148,8 +150,9 @@ export class UserController {
     };
   }
 
-  @UseGuards(JwtGuard, RolesGuard)
+  @UseGuards(JwtGuard, RolesGuard, PermissionsGuard)
   @Roles(UserRole.ADMIN)
+  @Permissions('user:update')
   @Patch(':id')
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   @Header('Pragma', 'no-cache')
@@ -176,8 +179,9 @@ export class UserController {
     };
   }
 
-  @UseGuards(JwtGuard, RolesGuard)
+  @UseGuards(JwtGuard, RolesGuard, PermissionsGuard)
   @Roles(UserRole.ADMIN)
+  @Permissions('user:delete')
   @Delete(':id')
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   @Header('Pragma', 'no-cache')

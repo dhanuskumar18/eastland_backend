@@ -1,10 +1,13 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, ParseIntPipe, Query, Req, Header } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, ParseIntPipe, Query, Req, Header, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 import { PagesService } from './pages.service';
 import { CreatePageDto } from './dto/create-page.dto';
 import { UpdatePageDto } from './dto/update-page.dto';
 import { PaginationDto } from './dto/pagination.dto';
 import { SkipCsrf } from 'src/auth/csrf';
+import { JwtGuard, PermissionsGuard } from 'src/auth/guard';
+import { Permissions, GetUser } from 'src/auth/decorator';
+import type { User } from '@prisma/client';
 // import { SkipThrottle } from '@nestjs/throttler';
 
 @SkipCsrf()
@@ -13,15 +16,20 @@ import { SkipCsrf } from 'src/auth/csrf';
 export class PagesController {
   constructor(private readonly pagesService: PagesService) {}
 
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @Permissions('page:create')
   @Post()
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   @Header('Pragma', 'no-cache')
   @Header('Expires', '0')
-  create(@Body() dto: CreatePageDto, @Req() req: Request) {
-    const userId = (req.user as any)?.id;
+  create(
+    @Body() dto: CreatePageDto,
+    @GetUser() user: User,
+    @Req() req: Request,
+  ) {
     return this.pagesService.create(
       dto,
-      userId,
+      user.id,
       req.ip || req.socket.remoteAddress,
       req.get('user-agent')
     );
@@ -52,24 +60,35 @@ export class PagesController {
     return this.pagesService.findBySlug(decodedSlug, hasPaginationParams ? paginationDto : undefined);
   }
 
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @Permissions('page:delete')
   @Delete(':id')
-  remove(@Param('id', ParseIntPipe) id: number, @Req() req: Request) {
-    const userId = (req.user as any)?.id;
+  remove(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser() user: User,
+    @Req() req: Request,
+  ) {
     return this.pagesService.remove(
       id,
-      userId,
+      user.id,
       req.ip || req.socket.remoteAddress,
       req.get('user-agent')
     );
   }
 
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @Permissions('page:update')
   @Patch(':id')
-  update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdatePageDto, @Req() req: Request) {
-    const userId = (req.user as any)?.id;
+  update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdatePageDto,
+    @GetUser() user: User,
+    @Req() req: Request,
+  ) {
     return this.pagesService.update(
       id,
       dto,
-      userId,
+      user.id,
       req.ip || req.socket.remoteAddress,
       req.get('user-agent')
     );

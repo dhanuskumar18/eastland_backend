@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, ParseIntPipe, Query, BadRequestException, Req, Header } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, ParseIntPipe, Query, BadRequestException, Req, Header, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 import { TagsService } from './tags.service';
 import { TagForDto, CreateTagDto } from './dto/create-tag.dto';
@@ -6,6 +6,9 @@ import { UpdateTagDto } from './dto/update-tag.dto';
 import { PaginationDto } from './dto/pagination.dto';
 import { SkipCsrf } from 'src/auth/csrf';
 import { SkipThrottle } from '@nestjs/throttler';
+import { JwtGuard, PermissionsGuard } from 'src/auth/guard';
+import { Permissions, GetUser } from 'src/auth/decorator';
+import type { User } from '@prisma/client';
 
 @SkipCsrf()
 @SkipThrottle() // Skip throttling for public tag listings
@@ -13,15 +16,20 @@ import { SkipThrottle } from '@nestjs/throttler';
 export class TagsController {
   constructor(private readonly tagsService: TagsService) {}
 
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @Permissions('tag:create')
   @Post()
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   @Header('Pragma', 'no-cache')
   @Header('Expires', '0')
-  create(@Body() dto: CreateTagDto, @Req() req: Request) {
-    const userId = (req.user as any)?.id;
+  create(
+    @Body() dto: CreateTagDto,
+    @GetUser() user: User,
+    @Req() req: Request,
+  ) {
     return this.tagsService.create(
       dto,
-      userId,
+      user.id,
       req.ip || req.socket.remoteAddress,
       req.get('user-agent')
     );
@@ -61,6 +69,8 @@ export class TagsController {
     return this.tagsService.findOne(id, normalized);
   }
 
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @Permissions('tag:update')
   @Patch(':id')
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   @Header('Pragma', 'no-cache')
@@ -68,18 +78,20 @@ export class TagsController {
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateTagDto,
+    @GetUser() user: User,
     @Req() req: Request,
   ) {
-    const userId = (req.user as any)?.id;
     return this.tagsService.update(
       id,
       dto,
-      userId,
+      user.id,
       req.ip || req.socket.remoteAddress,
       req.get('user-agent')
     );
   }
 
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @Permissions('tag:delete')
   @Delete(':id')
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   @Header('Pragma', 'no-cache')
@@ -87,14 +99,14 @@ export class TagsController {
   remove(
     @Param('id', ParseIntPipe) id: number,
     @Query('for') forType: TagForDto,
+    @GetUser() user: User,
     @Req() req: Request,
   ) {
-    const userId = (req.user as any)?.id;
     const normalized = this.normalizeForRequired(forType);
     return this.tagsService.remove(
       id,
       normalized,
-      userId,
+      user.id,
       req.ip || req.socket.remoteAddress,
       req.get('user-agent')
     );

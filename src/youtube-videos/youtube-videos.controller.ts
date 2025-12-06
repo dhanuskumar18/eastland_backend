@@ -11,6 +11,7 @@ import {
   HttpCode,
   HttpStatus,
   Header,
+  UseGuards,
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { YouTubeVideosService } from './youtube-videos.service';
@@ -20,6 +21,9 @@ import { PaginationDto } from '../brand/dto/pagination.dto';
 import type { YouTubeVideoFilterDto } from './dto/filter.dto';
 import { SkipCsrf } from 'src/auth/csrf';
 import { SkipThrottle } from '@nestjs/throttler';
+import { JwtGuard, PermissionsGuard } from 'src/auth/guard';
+import { Permissions, GetUser } from 'src/auth/decorator';
+import type { User } from '@prisma/client';
 
 @SkipCsrf()
 @SkipThrottle() // Skip throttling for public video listings
@@ -27,16 +31,21 @@ import { SkipThrottle } from '@nestjs/throttler';
 export class YouTubeVideosController {
   constructor(private readonly youtubeVideosService: YouTubeVideosService) {}
 
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @Permissions('youtube-video:create')
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   @Header('Pragma', 'no-cache')
   @Header('Expires', '0')
-  async create(@Body() dto: CreateYouTubeVideoDto, @Req() req: Request) {
-    const userId = (req.user as any)?.id;
+  async create(
+    @Body() dto: CreateYouTubeVideoDto,
+    @GetUser() user: User,
+    @Req() req: Request,
+  ) {
     const data = await this.youtubeVideosService.create(
       dto,
-      userId,
+      user.id,
       req.ip || req.socket.remoteAddress,
       req.get('user-agent')
     );
@@ -123,6 +132,8 @@ export class YouTubeVideosController {
     };
   }
 
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @Permissions('youtube-video:update')
   @Patch(':id')
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   @Header('Pragma', 'no-cache')
@@ -130,13 +141,13 @@ export class YouTubeVideosController {
   async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateYouTubeVideoDto,
+    @GetUser() user: User,
     @Req() req: Request,
   ) {
-    const userId = (req.user as any)?.id;
     const data = await this.youtubeVideosService.update(
       id,
       dto,
-      userId,
+      user.id,
       req.ip || req.socket.remoteAddress,
       req.get('user-agent')
     );
@@ -149,16 +160,21 @@ export class YouTubeVideosController {
     };
   }
 
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @Permissions('youtube-video:delete')
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   @Header('Pragma', 'no-cache')
   @Header('Expires', '0')
-  async remove(@Param('id', ParseIntPipe) id: number, @Req() req: Request) {
-    const userId = (req.user as any)?.id;
+  async remove(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser() user: User,
+    @Req() req: Request,
+  ) {
     await this.youtubeVideosService.remove(
       id,
-      userId,
+      user.id,
       req.ip || req.socket.remoteAddress,
       req.get('user-agent')
     );

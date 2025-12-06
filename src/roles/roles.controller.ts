@@ -16,8 +16,8 @@ import {
 } from '@nestjs/common';
 import type { User } from '@prisma/client';
 import type { Request } from 'express';
-import { JwtGuard, RolesGuard } from 'src/auth/guard';
-import { GetUser, Roles } from 'src/auth/decorator';
+import { JwtGuard, RolesGuard, PermissionsGuard } from 'src/auth/guard';
+import { GetUser, Roles, Permissions } from 'src/auth/decorator';
 import { RolesService } from './roles.service';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
@@ -38,8 +38,9 @@ export class RolesController {
 
   // ==================== Permission CRUD Endpoints (must come before :id routes) ====================
 
-  @UseGuards(JwtGuard, RolesGuard)
+  @UseGuards(JwtGuard, RolesGuard, PermissionsGuard)
   @Roles(UserRole.ADMIN)
+  @Permissions('permission:create')
   @Post('permissions')
   @HttpCode(HttpStatus.CREATED)
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
@@ -65,8 +66,9 @@ export class RolesController {
     };
   }
 
-  @UseGuards(JwtGuard, RolesGuard)
+  @UseGuards(JwtGuard, RolesGuard, PermissionsGuard)
   @Roles(UserRole.ADMIN)
+  @Permissions('permission:create')
   @Post('permissions/batch')
   @HttpCode(HttpStatus.CREATED)
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
@@ -127,8 +129,9 @@ export class RolesController {
     };
   }
 
-  @UseGuards(JwtGuard, RolesGuard)
+  @UseGuards(JwtGuard, RolesGuard, PermissionsGuard)
   @Roles(UserRole.ADMIN)
+  @Permissions('permission:update')
   @Patch('permissions/:id')
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   @Header('Pragma', 'no-cache')
@@ -155,8 +158,9 @@ export class RolesController {
     };
   }
 
-  @UseGuards(JwtGuard, RolesGuard)
+  @UseGuards(JwtGuard, RolesGuard, PermissionsGuard)
   @Roles(UserRole.ADMIN)
+  @Permissions('permission:delete')
   @Delete('permissions/:id')
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   @Header('Pragma', 'no-cache')
@@ -182,8 +186,9 @@ export class RolesController {
 
   // ==================== Role CRUD Endpoints ====================
 
-  @UseGuards(JwtGuard, RolesGuard)
+  @UseGuards(JwtGuard, RolesGuard, PermissionsGuard)
   @Roles(UserRole.ADMIN)
+  @Permissions('role:create')
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
@@ -229,8 +234,9 @@ export class RolesController {
 
   // ==================== Permission Assignment Endpoints ====================
 
-  @UseGuards(JwtGuard, RolesGuard)
+  @UseGuards(JwtGuard, RolesGuard, PermissionsGuard)
   @Roles(UserRole.ADMIN)
+  @Permissions('role:update')
   @Post(':id/permissions')
   @HttpCode(HttpStatus.OK)
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
@@ -275,8 +281,9 @@ export class RolesController {
     };
   }
 
-  @UseGuards(JwtGuard, RolesGuard)
+  @UseGuards(JwtGuard, RolesGuard, PermissionsGuard)
   @Roles(UserRole.ADMIN)
+  @Permissions('role:update')
   @Patch(':id')
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   @Header('Pragma', 'no-cache')
@@ -303,8 +310,9 @@ export class RolesController {
     };
   }
 
-  @UseGuards(JwtGuard, RolesGuard)
+  @UseGuards(JwtGuard, RolesGuard, PermissionsGuard)
   @Roles(UserRole.ADMIN)
+  @Permissions('role:delete')
   @Delete(':id')
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   @Header('Pragma', 'no-cache')

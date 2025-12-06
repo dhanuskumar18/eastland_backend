@@ -9,6 +9,7 @@ import {
   ParseIntPipe,
   Req,
   Header,
+  UseGuards,
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { ProductsService } from './products.service';
@@ -18,6 +19,9 @@ import { PaginationDto } from '../brand/dto/pagination.dto';
 import type { ProductFilterDto } from './dto/filter.dto';
 import { SkipCsrf } from 'src/auth/csrf';
 import { SkipThrottle } from '@nestjs/throttler';
+import { JwtGuard, PermissionsGuard } from 'src/auth/guard';
+import { Permissions, GetUser } from 'src/auth/decorator';
+import type { User } from '@prisma/client';
 
 @SkipCsrf()
 @SkipThrottle() // Skip throttling for public product listings
@@ -25,15 +29,20 @@ import { SkipThrottle } from '@nestjs/throttler';
 export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}
 
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @Permissions('product:create')
   @Post()
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   @Header('Pragma', 'no-cache')
   @Header('Expires', '0')
-  async create(@Body() dto: CreateProductDto, @Req() req: Request) {
-    const userId = (req.user as any)?.id;
+  async create(
+    @Body() dto: CreateProductDto,
+    @GetUser() user: User,
+    @Req() req: Request,
+  ) {
     return this.productsService.create(
       dto,
-      userId,
+      user.id,
       req.ip || req.socket.remoteAddress,
       req.get('user-agent')
     );
@@ -87,6 +96,8 @@ export class ProductsController {
     return this.productsService.findOne(id);
   }
 
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @Permissions('product:update')
   @Patch(':id')
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   @Header('Pragma', 'no-cache')
@@ -94,27 +105,32 @@ export class ProductsController {
   async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateProductDto,
+    @GetUser() user: User,
     @Req() req: Request,
   ) {
-    const userId = (req.user as any)?.id;
     return this.productsService.update(
       id,
       dto,
-      userId,
+      user.id,
       req.ip || req.socket.remoteAddress,
       req.get('user-agent')
     );
   }
 
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @Permissions('product:delete')
   @Delete(':id')
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   @Header('Pragma', 'no-cache')
   @Header('Expires', '0')
-  remove(@Param('id', ParseIntPipe) id: number, @Req() req: Request) {
-    const userId = (req.user as any)?.id;
+  remove(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser() user: User,
+    @Req() req: Request,
+  ) {
     return this.productsService.remove(
       id,
-      userId,
+      user.id,
       req.ip || req.socket.remoteAddress,
       req.get('user-agent')
     );

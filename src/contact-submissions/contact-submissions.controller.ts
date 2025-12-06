@@ -16,7 +16,9 @@ import { ContactSubmissionsService } from './contact-submissions.service';
 import { CreateContactSubmissionDto } from './dto/create-contact-submission.dto';
 import { PaginationDto } from '../testimonials/dto/pagination.dto';
 import { SkipCsrf } from '../auth/csrf';
-import { JwtGuard } from '../auth/guard';
+import { JwtGuard, PermissionsGuard } from '../auth/guard';
+import { Permissions, GetUser } from '../auth/decorator';
+import type { User } from '@prisma/client';
 
 @Controller('contact-submissions')
 export class ContactSubmissionsController {
@@ -68,15 +70,18 @@ export class ContactSubmissionsController {
     return this.contactSubmissionsService.getUnreadSubmissions(limitNum);
   }
 
-  @UseGuards(JwtGuard)
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @Permissions('contact-submission:update')
   @Post('read/all')
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   @Header('Pragma', 'no-cache')
   @Header('Expires', '0')
-  markAllAsRead(@Req() req: Request) {
-    const userId = (req.user as any)?.id;
+  markAllAsRead(
+    @GetUser() user: User,
+    @Req() req: Request,
+  ) {
     return this.contactSubmissionsService.markAllAsRead(
-      userId,
+      user.id,
       req.ip || req.socket.remoteAddress,
       req.get('user-agent')
     );
@@ -92,31 +97,39 @@ export class ContactSubmissionsController {
     return this.contactSubmissionsService.findOne(id);
   }
 
-  @UseGuards(JwtGuard)
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @Permissions('contact-submission:delete')
   @Delete(':id')
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   @Header('Pragma', 'no-cache')
   @Header('Expires', '0')
-  remove(@Param('id', ParseIntPipe) id: number, @Req() req: Request) {
-    const userId = (req.user as any)?.id;
+  remove(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser() user: User,
+    @Req() req: Request,
+  ) {
     return this.contactSubmissionsService.remove(
       id,
-      userId,
+      user.id,
       req.ip || req.socket.remoteAddress,
       req.get('user-agent')
     );
   }
 
-  @UseGuards(JwtGuard)
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @Permissions('contact-submission:update')
   @Post(':id/read')
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   @Header('Pragma', 'no-cache')
   @Header('Expires', '0')
-  markAsRead(@Param('id', ParseIntPipe) id: number, @Req() req: Request) {
-    const userId = (req.user as any)?.id;
+  markAsRead(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser() user: User,
+    @Req() req: Request,
+  ) {
     return this.contactSubmissionsService.markAsRead(
       id,
-      userId,
+      user.id,
       req.ip || req.socket.remoteAddress,
       req.get('user-agent')
     );

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, ParseIntPipe, Query, BadRequestException, Req, Header } from '@nestjs/common';  
+import { Controller, Get, Post, Body, Patch, Param, Delete, ParseIntPipe, Query, BadRequestException, Req, Header, UseGuards } from '@nestjs/common';  
 import type { Request } from 'express';
 import { CategoryService } from './category.service';
 import { CategoryForDto, CreateCategoryDto } from './dto/create-category.dto';
@@ -6,21 +6,29 @@ import { UpdateCategoryDto } from './dto/update-category.dto';
 import { PaginationDto } from './dto/pagination.dto';
 import { SkipCsrf } from 'src/auth/csrf';
 import { SkipThrottle } from '@nestjs/throttler';
+import { JwtGuard, PermissionsGuard } from 'src/auth/guard';
+import { Permissions, GetUser } from 'src/auth/decorator';
+import type { User } from '@prisma/client';
 
 @SkipCsrf()
 @SkipThrottle() // Skip throttling for public category listings
 @Controller('categories')
 export class CategoryController {
   constructor(private readonly service: CategoryService) {}
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @Permissions('category:create')
   @Post()
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   @Header('Pragma', 'no-cache')
   @Header('Expires', '0')
-  create(@Body() dto: CreateCategoryDto, @Req() req: Request) {
-    const userId = (req.user as any)?.id;
+  create(
+    @Body() dto: CreateCategoryDto,
+    @GetUser() user: User,
+    @Req() req: Request,
+  ) {
     return this.service.create(
       dto,
-      userId,
+      user.id,
       req.ip || req.socket.remoteAddress,
       req.get('user-agent')
     );
@@ -60,6 +68,8 @@ export class CategoryController {
     return this.service.findOne(id, normalized);
   }
 
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @Permissions('category:update')
   @Patch(':id')
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   @Header('Pragma', 'no-cache')
@@ -67,18 +77,20 @@ export class CategoryController {
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateCategoryDto,
+    @GetUser() user: User,
     @Req() req: Request,
   ) {
-    const userId = (req.user as any)?.id;
     return this.service.update(
       id,
       dto,
-      userId,
+      user.id,
       req.ip || req.socket.remoteAddress,
       req.get('user-agent')
     );
   }
 
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @Permissions('category:delete')
   @Delete(':id')
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   @Header('Pragma', 'no-cache')
@@ -86,14 +98,14 @@ export class CategoryController {
   remove(
     @Param('id', ParseIntPipe) id: number,
     @Query('for') forType: CategoryForDto,
+    @GetUser() user: User,
     @Req() req: Request,
   ) {
-    const userId = (req.user as any)?.id;
     const normalized = this.normalizeForRequired(forType);
     return this.service.remove(
       id,
       normalized,
-      userId,
+      user.id,
       req.ip || req.socket.remoteAddress,
       req.get('user-agent')
     );

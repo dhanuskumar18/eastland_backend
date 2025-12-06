@@ -9,6 +9,7 @@ import {
   ParseIntPipe,
   Req,
   Header,
+  UseGuards,
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { TestimonialsService } from './testimonials.service';
@@ -18,6 +19,9 @@ import { PaginationDto } from './dto/pagination.dto';
 import type { TestimonialFilterDto } from './dto/filter.dto';
 import { SkipCsrf } from 'src/auth/csrf';
 import { SkipThrottle } from '@nestjs/throttler';
+import { JwtGuard, PermissionsGuard } from 'src/auth/guard';
+import { Permissions, GetUser } from 'src/auth/decorator';
+import type { User } from '@prisma/client';
 
 @SkipCsrf()
 @SkipThrottle() // Skip throttling for public testimonial listings
@@ -27,15 +31,20 @@ export class TestimonialsController {
     private readonly testimonialsService: TestimonialsService,
   ) {}
 
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @Permissions('testimonial:create')
   @Post()
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   @Header('Pragma', 'no-cache')
   @Header('Expires', '0')
-  async create(@Body() dto: CreateTestimonialDto, @Req() req: Request) {
-    const userId = (req.user as any)?.id;
+  async create(
+    @Body() dto: CreateTestimonialDto,
+    @GetUser() user: User,
+    @Req() req: Request,
+  ) {
     return this.testimonialsService.create(
       dto,
-      userId,
+      user.id,
       req.ip || req.socket.remoteAddress,
       req.get('user-agent')
     );
@@ -75,6 +84,8 @@ export class TestimonialsController {
     return this.testimonialsService.findOne(id);
   }
 
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @Permissions('testimonial:update')
   @Patch(':id')
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   @Header('Pragma', 'no-cache')
@@ -82,27 +93,32 @@ export class TestimonialsController {
   async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateTestimonialDto,
+    @GetUser() user: User,
     @Req() req: Request,
   ) {
-    const userId = (req.user as any)?.id;
     return this.testimonialsService.update(
       id,
       dto,
-      userId,
+      user.id,
       req.ip || req.socket.remoteAddress,
       req.get('user-agent')
     );
   }
 
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @Permissions('testimonial:delete')
   @Delete(':id')
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   @Header('Pragma', 'no-cache')
   @Header('Expires', '0')
-  remove(@Param('id', ParseIntPipe) id: number, @Req() req: Request) {
-    const userId = (req.user as any)?.id;
+  remove(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser() user: User,
+    @Req() req: Request,
+  ) {
     return this.testimonialsService.remove(
       id,
-      userId,
+      user.id,
       req.ip || req.socket.remoteAddress,
       req.get('user-agent')
     );

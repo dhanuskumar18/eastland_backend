@@ -1,17 +1,18 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { AuditLogService } from '../common/services/audit-log.service';
-import { JwtGuard, RolesGuard } from '../auth/guard';
-import { Roles } from '../auth/decorator';
+import { JwtGuard, RolesGuard, PermissionsGuard } from '../auth/guard';
+import { Roles, Permissions } from '../auth/decorator';
 import { UserRole } from '@prisma/client';
 import { SkipCsrf } from '../auth/csrf';
 
 @SkipCsrf()
 @Controller('audit-logs')
-@UseGuards(JwtGuard, RolesGuard)
+@UseGuards(JwtGuard, RolesGuard, PermissionsGuard)
 @Roles(UserRole.ADMIN)
 export class AuditLogsController {
   constructor(private readonly auditLogService: AuditLogService) {}
 
+  @Permissions('audit-log:read')
   @Get()
   async getAuditLogs(
     @Query('userId') userId?: string,
